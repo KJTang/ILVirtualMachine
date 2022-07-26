@@ -256,6 +256,61 @@ namespace ILVM
             return path;
         }
 
+        private static Dictionary<int, MethodDefinition> methodId2methodDef = new Dictionary<int, MethodDefinition>(8196);
+        private static Dictionary<MethodDefinition, int> methodDef2methodId = new Dictionary<MethodDefinition, int>(8196);
+        public static void ClearMethodId()
+        {
+            methodId2methodDef.Clear();
+            methodDef2methodId.Clear();
+        }
+
+        public static void AddMethodId(int methodId, MethodDefinition methodDef)
+        {
+            methodId2methodDef.Add(methodId, methodDef);
+            methodDef2methodId.Add(methodDef, methodId);
+        }
+
+        public static void DumpAllMethodId()
+        {
+            Logger.Log("ILVmManager: DumpAllMethodId: {0}", methodId2methodDef.Count);
+            foreach (var kvp in methodId2methodDef)
+            {
+                Logger.Log("{0}: \t{1}", kvp.Key, kvp.Value);
+            }
+        }
+
+        public static MethodDefinition GetMethodDefById(int methodId)
+        {
+            MethodDefinition methodDef;
+            methodId2methodDef.TryGetValue(methodId, out methodDef);
+            return methodDef;
+        }
+
+        public static int GetMethodIdByDef(MethodDefinition methodDef)
+        {
+            int methodId;
+            methodDef2methodId.TryGetValue(methodDef, out methodId);
+            return methodId;
+        }
+
+
+        public class MethodInfoWrap
+        {
+            private MethodInfo methodInfo;
+        }
+
+        private static Dictionary<int, MethodInfoWrap> methodInfos = new Dictionary<int, MethodInfoWrap>();
+
+        public static void ClearMethodInfo()
+        {
+            methodInfos.Clear();
+        }
+
+        public static void SetMethodInfo(MethodDefinition methodDef)
+        {
+            //
+        }
+
         public static bool HasMethodInfo(int methodId)
         {
             return false;

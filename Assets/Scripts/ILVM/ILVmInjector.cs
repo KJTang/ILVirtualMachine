@@ -125,6 +125,7 @@ namespace ILVM
                 Logger.Error("ILVmInjector: assembly has already injected!");
                 return;
             }
+            ILVmManager.ClearMethodId();
 
             var timer = new DebugTimer();
             timer.Start("Get Type To Inject");
@@ -166,6 +167,13 @@ namespace ILVM
 
                 // modify assembly
                 assemblyHandle.Write();
+
+                // save method id
+                for (var i = 0; i != method2Inject.Count; ++i)
+                {
+                    var methodDef = method2Inject[i];
+                    ILVmManager.AddMethodId(i, methodDef);
+                }
             }
             catch (Exception e)
             {
@@ -202,9 +210,44 @@ namespace ILVM
             if (!copySucc)
                 return;
 
+            timer.Start("Print MethodId");
+            ILVmManager.DumpAllMethodId();
+            timer.Stop();
+
+
             Logger.Error("ILVmInjector: inject assembly succ");
         }
         
+        //private static MethodInfo FindMethodInfoInType(Type type, MethodDefinition methodDef)
+        //{
+        //    MethodInfo methodInfo = null;
+        //    foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+        //    {
+        //        if (method.Name != methodDef.Name)
+        //            continue;
+        //        if (method.GetParameters().Length != methodDef.Parameters.Count)
+        //            continue;
+
+        //        var matched = true;
+        //        for (var i = 0; i != methodDef.Parameters.Count; ++i)
+        //        {
+        //            var param = method.GetParameters()[i];
+        //            var paramDef = methodDef.Parameters[i];
+        //            if (param.ParameterType.FullName != paramDef.ParameterType.FullName)
+        //            {
+        //                matched = false;
+        //                break;
+        //            }
+        //        }
+        //        if (matched)
+        //        {
+        //            methodInfo = method;
+        //            break;
+        //        }
+        //    }
+        //    return methodInfo;
+        //}
+
         
         private static void InjectMethod(int methodId, MethodDefinition method, AssemblyHandle assemblyHandle)
         {
