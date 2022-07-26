@@ -68,6 +68,7 @@ namespace ILVM
     public class AssemblyHandle : IDisposable
     {
         private AssemblyDefinition assemblyDef;
+        private bool assemblyReadSymbols = false;
 
         public AssemblyHandle()
         {
@@ -75,9 +76,9 @@ namespace ILVM
         }
 
         private void Init()
-        {
-            var path = Application.dataPath.Replace("/Assets", "/Library/ScriptAssemblies/Assembly-CSharp.dll");
-            
+        {            
+            var path = ILVmManager.GetAssemblyPath();
+
             // read assembly
             AssemblyDefinition assembly = null;
             var readSymbols = true;
@@ -102,6 +103,7 @@ namespace ILVM
             }
             if (assembly == null)
                 return;
+            assemblyReadSymbols = readSymbols;
 
             // init resolver search path
             var initResolverSucc = true;
@@ -126,10 +128,12 @@ namespace ILVM
                 return;
 
             assemblyDef = assembly;
+            ImportReference();
         }
 
         public void Dispose()
         {
+            ClearReference();
             if (assemblyDef == null)
                 return;
             
@@ -146,11 +150,149 @@ namespace ILVM
         {
             return assemblyDef;
         }
+
+        public void Write()
+        {
+            if (assemblyDef == null)
+                return;
+            
+            assemblyDef.Write(ILVmManager.GetAssemblyHotfixPath(), new WriterParameters { WriteSymbols = assemblyReadSymbols });
+        }
+
+        private const string injectedFlag = "ILVMInjectedFlag";
+        public bool IsInjected()
+        {
+            if (assemblyDef == null)
+                return false;
+
+            var injected = assemblyDef.MainModule.Types.Any(t => t.Name == injectedFlag);
+            return injected;
+        }
+
+        public void SetIsInjected()
+        {
+            if (assemblyDef == null)
+                return;
+
+            var objType = assemblyDef.MainModule.ImportReference(typeof(System.Object));
+            var flagType = new TypeDefinition("ILVM", injectedFlag, Mono.Cecil.TypeAttributes.Class | Mono.Cecil.TypeAttributes.Public, objType);
+            assemblyDef.MainModule.Types.Add(flagType);
+        }
+        
+        private void ImportReference()
+        {
+            var mgrType = assemblyDef.MainModule.GetType("ILVM.ILVmManager");
+            foreach (MethodDefinition method in mgrType.Methods)
+            {
+                if (method.Name == "HasMethodInfo")
+                    mr_HasMethodInfo = assemblyDef.MainModule.ImportReference(method);
+                else if (method.Name == "MethodReturnVoidWrapper")
+                    mr_MethodReturnVoidWrapper = assemblyDef.MainModule.ImportReference(method);
+                else if (method.Name == "MethodReturnObjectWrapper")
+                    mr_MethodReturnObjectWrapper = assemblyDef.MainModule.ImportReference(method);
+            }
+
+            var objType = typeof(System.Object);
+            tr_SystemObject = assemblyDef.MainModule.ImportReference(objType);
+            
+            var intType = typeof(System.Int32);
+            tr_SystemInt = assemblyDef.MainModule.ImportReference(intType);
+        }
+        
+        private void ClearReference()
+        {
+            mr_HasMethodInfo = null;
+            mr_MethodReturnVoidWrapper = null;
+            mr_MethodReturnObjectWrapper = null;
+
+            tr_SystemObject = null;
+            tr_SystemInt = null;
+        }
+
+        public MethodReference MR_HasMethodInfo
+        {
+            get { return mr_HasMethodInfo; }
+        }
+        private MethodReference mr_HasMethodInfo;
+
+        public MethodReference MR_MethodReturnVoidWrapper
+        {
+            get { return mr_MethodReturnVoidWrapper; }
+        }
+        private MethodReference mr_MethodReturnVoidWrapper;
+        
+        public MethodReference MR_MethodReturnObjectWrapper
+        {
+            get { return mr_MethodReturnObjectWrapper; }
+        }
+        private MethodReference mr_MethodReturnObjectWrapper;
+        
+        public TypeReference TR_SystemObject
+        {
+            get { return tr_SystemObject; }
+        }
+        private TypeReference tr_SystemObject;
+        
+        public TypeReference TR_SystemInt
+        {
+            get { return tr_SystemInt; }
+        }
+        private TypeReference tr_SystemInt;
     }
 
 
     public class ILVmManager
     {
-        //
+        public static string GetAssemblyPath()
+        {
+            var path = Application.dataPath.Replace("/Assets", "/Library/ScriptAssemblies/Assembly-CSharp.dll");
+            return path;
+        }
+
+        public static string GetAssemblyHotfixPath()
+        {
+            var path = Application.dataPath.Replace("/Assets", "/Library/ScriptAssemblies/Assembly-CSharp.dll");
+            path = path.Replace("Assembly-CSharp.dll", "Assembly-CSharp.hotfix.dll");
+            return path;
+        }
+
+        public static bool HasMethodInfo(int methodId)
+        {
+            return false;
+        }
+
+        public static void MethodReturnVoidWrapper(object[] objList)
+        {
+            //var methodId = (System.Int32) objList[0];
+            //var methodInfo = GetMethodInfo(methodId);
+            //Assert.IsNotNull(methodInfo);
+
+            //var offset = methodInfo.paramOffset;
+            //var len = objList.Length - offset;
+            //var param = new object[len];
+            //for (var i = 0; i != len; ++i)
+            //    param[i] = objList[i + offset];
+
+            //var instance = objList[1];
+            //methodInfo.methodInfo.Invoke(instance, param);
+        }
+
+        public static object MethodReturnObjectWrapper(object[] objList)
+        {
+            //var methodId = (System.Int32) objList[0];
+            //var methodInfo = GetMethodInfo(methodId);
+            //Assert.IsNotNull(methodInfo);
+            
+            //var offset = methodInfo.paramOffset;
+            //var len = objList.Length - offset;
+            //var param = new object[len];
+            //for (var i = 0; i != len; ++i)
+            //    param[i] = objList[i + offset];
+
+            //var instance = objList[1];
+            //return methodInfo.methodInfo.Invoke(instance, param);
+
+            return null;
+        }
     }
 }

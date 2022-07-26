@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace ILVM
 {
@@ -84,6 +86,21 @@ namespace ILVM
             return true;
         }
 
+        private static bool FilterMethod(MethodDefinition method)
+        {
+            if (!method.IsDefinition || !method.HasBody)
+                return false;
+
+            var methodFullName = method.DeclaringType.FullName + method.Name;
+            if (filterMethod.Contains(methodFullName))
+                return false;
+
+            if (method.IsAbstract || method.Name == "op_Equality" || method.Name == "op_Inequality")
+                return false;
+
+            return true;
+        }
+
         private static Type GetTypeInAssembly(string typeName)
         {
             var assembly = Assembly.Load("Assembly-CSharp");
@@ -102,18 +119,218 @@ namespace ILVM
 
         public static void Inject()
         {
-            // TODO: inject dll
+            var assemblyHandle = new AssemblyHandle();
+            if (assemblyHandle.IsInjected())
+            {
+                Logger.Error("ILVmInjector: assembly has already injected!");
+                return;
+            }
+
+            var timer = new DebugTimer();
+            timer.Start("Get Type To Inject");
+            var type2Inject = new HashSet<string>();
             foreach (var typeInfo in GetTypeToInject())
             {
-                Logger.Log("type: {0}", typeInfo.FullName);
-                foreach (var methodInfo in typeInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+                type2Inject.Add(typeInfo.FullName);
+            }
+            timer.Stop();
+
+            timer.Start("Get Method To Inject");
+            var method2Inject = new List<MethodDefinition>();
+            foreach (var typeDef in assemblyHandle.GetAssembly().MainModule.GetTypes())
+            {
+                if (!type2Inject.Contains(typeDef.FullName))
+                    continue;
+
+                foreach (var methodDef in typeDef.Methods)
                 {
-                    if (methodInfo.DeclaringType != typeInfo)
+                    if (!FilterMethod(methodDef))
                         continue;
-                    if (!FilterMethod(methodInfo))
-                        continue;
-                    Logger.Log("method: {0} \t{1}", methodInfo, typeInfo.FullName);
+                    method2Inject.Add(methodDef);
                 }
+            }
+            timer.Stop();
+
+            timer.Start("Inject Method");
+            var succ = true;
+            try
+            {
+                for (var i = 0; i != method2Inject.Count; ++i)
+                {
+                    var methodDef = method2Inject[i];
+                    InjectMethod(i, methodDef, assemblyHandle);
+                }
+                
+                // mark as injected
+                assemblyHandle.SetIsInjected();
+
+                // modify assembly
+                assemblyHandle.Write();
+            }
+            catch (Exception e)
+            {
+                succ = false;
+                Logger.Error("ILVmInjector: inject failed: \n{0}", e.ToString());
+            }
+            assemblyHandle.Dispose();
+            assemblyHandle = null;
+            timer.Stop();
+            if (!succ)
+                return;
+
+            
+            timer.Start("Copy Assembly");
+            var copySucc = true;
+            try
+            {
+                var assemblyPath = ILVmManager.GetAssemblyPath();
+                var assemblyHotfixPath = ILVmManager.GetAssemblyHotfixPath();;
+                var assemblyPDBPath = assemblyPath.Replace(".dll", ".pdb");
+                var assemblyHotfixPDBPath = assemblyHotfixPath.Replace(".dll", ".pdb");
+                Logger.Log("assemblyPath: {0} \t{1}", assemblyPath, assemblyPDBPath);
+                Logger.Log("assemblyHotfixPath: {0} \t{1}", assemblyHotfixPath, assemblyHotfixPDBPath);
+
+                System.IO.File.Copy(assemblyHotfixPath, assemblyPath, true);
+                System.IO.File.Copy(assemblyHotfixPDBPath, assemblyPDBPath, true);
+            }
+            catch (Exception e)
+            {
+                copySucc = false;
+                Logger.Error("ILVmInjector: override assembly failed: {0}", e);
+            }
+            timer.Stop();
+            if (!copySucc)
+                return;
+
+            Logger.Error("ILVmInjector: inject assembly succ");
+        }
+        
+        
+        private static void InjectMethod(int methodId, MethodDefinition method, AssemblyHandle assemblyHandle)
+        {
+            var assembly = assemblyHandle.GetAssembly();
+            var body = method.Body;
+            var originIL = body.Instructions;
+            var ilProcessor = body.GetILProcessor();
+            var insertPoint = originIL[0];
+            var endPoint = originIL[originIL.Count - 1];
+            var ilList = new List<Instruction>();
+            ilList.Add(Instruction.Create(OpCodes.Ldc_I4, methodId));
+            ilList.Add(Instruction.Create(OpCodes.Call, assemblyHandle.MR_HasMethodInfo));
+            ilList.Add(Instruction.Create(OpCodes.Brfalse, insertPoint));
+            InjectMethodArgument(methodId, method, ilList, assemblyHandle);
+            if (method.ReturnType.FullName == "System.Void")
+                ilList.Add(Instruction.Create(OpCodes.Call, assemblyHandle.MR_MethodReturnVoidWrapper));
+            else
+                ilList.Add(Instruction.Create(OpCodes.Call, assemblyHandle.MR_MethodReturnObjectWrapper));
+            if (method.ReturnType.IsValueType)  // unbox return value
+            {
+                var returnType = assembly.MainModule.ImportReference(method.ReturnType);
+                var typeName = returnType.FullName;
+                OpCode op;
+                if (typeName == "System.Boolean")
+                    op = OpCodes.Ldind_U1;
+                else if (typeName == "System.Int16")
+                    op = OpCodes.Ldind_I2;
+                else if (typeName == "System.UInt16")
+                    op = OpCodes.Ldind_U2;
+                else if (typeName == "System.Int32")
+                    op = OpCodes.Ldind_I4;
+                else if (typeName == "System.UInt32")
+                    op = OpCodes.Ldind_U4;
+                else if (typeName == "System.Int64")
+                    op = OpCodes.Ldind_I8;
+                else if (typeName == "System.UInt64")
+                    op = OpCodes.Ldind_I8;
+                else if (typeName == "System.Single")
+                    op = OpCodes.Ldind_R4;
+                else if (typeName == "System.Double")
+                    op = OpCodes.Ldind_R8;
+                else
+                    op = OpCodes.Nop;
+
+                // primitive types
+                if (op != OpCodes.Nop)
+                {
+                    ilList.Add(Instruction.Create(OpCodes.Unbox, returnType));
+                    ilList.Add(Instruction.Create(op));
+                }
+                // other types like custom struct
+                else
+                {
+                    ilList.Add(Instruction.Create(OpCodes.Unbox_Any, returnType));
+                }
+            }
+            ilList.Add(Instruction.Create(OpCodes.Br, endPoint));
+
+            // inject il
+            for (var i = ilList.Count - 1; i >= 0; --i)
+                ilProcessor.InsertBefore(originIL[0], ilList[i]);
+
+            Logger.Log("InjectMethod: {0}", method.FullName);
+        }
+
+        private static void InjectMethodArgument(int methodId, MethodDefinition method, List<Instruction> ilList, AssemblyHandle assemblyHandle)
+        {
+            var assembly = assemblyHandle.GetAssembly();
+            var shift = 2;  // extra: methodId, instance
+
+            //object[] arr = new object[argumentCount + shift]
+            var argumentCount = method.Parameters.Count;
+            ilList.Add(Instruction.Create(OpCodes.Ldc_I4, argumentCount + shift));  
+            ilList.Add(Instruction.Create(OpCodes.Newarr, assemblyHandle.TR_SystemObject));
+
+            // methodId
+            ilList.Add(Instruction.Create(OpCodes.Dup));
+            ilList.Add(Instruction.Create(OpCodes.Ldc_I4, 0));
+            ilList.Add(Instruction.Create(OpCodes.Ldc_I4, methodId));
+            ilList.Add(Instruction.Create(OpCodes.Box, assemblyHandle.TR_SystemInt));
+            ilList.Add(Instruction.Create(OpCodes.Stelem_Ref));
+
+            // instance
+            ilList.Add(Instruction.Create(OpCodes.Dup));
+            ilList.Add(Instruction.Create(OpCodes.Ldc_I4, 1));
+            if (method.IsStatic)
+                ilList.Add(Instruction.Create(OpCodes.Ldnull));
+            else
+                ilList.Add(Instruction.Create(OpCodes.Ldarg_0));
+            ilList.Add(Instruction.Create(OpCodes.Stelem_Ref));
+
+            // arguments
+            for (int i = 0; i < argumentCount; ++i) 
+            {
+                var parameter = method.Parameters[i];
+
+                // value = argument[i]
+                ilList.Add(Instruction.Create(OpCodes.Dup));
+                ilList.Add(Instruction.Create(OpCodes.Ldc_I4, i + shift));
+                ilList.Add(Instruction.Create(OpCodes.Ldarg, parameter));
+
+                // box
+                TryBoxMethodArgument(parameter, ilList, assembly);
+
+                // arr[i] = value;
+                ilList.Add(Instruction.Create(OpCodes.Stelem_Ref));
+            }
+
+            // don't pop it, we will need it when call method wrapper
+            // ilList.Add(Instruction.Create(OpCodes.Pop));
+        }
+
+        private static void TryBoxMethodArgument(ParameterDefinition param, List<Instruction> ilList, AssemblyDefinition assembly)
+        {
+            var paramType = param.ParameterType;
+            if (paramType.IsValueType)
+            {
+                ilList.Add(Instruction.Create(OpCodes.Box, paramType));
+            }
+            else if (paramType.IsGenericParameter)
+            {
+                ilList.Add(Instruction.Create(OpCodes.Box, assembly.MainModule.ImportReference(paramType)));
+            }
+            else if (param.IsOut)
+            {
+                ilList.Add(Instruction.Create(OpCodes.Ldind_Ref));
             }
         }
     }
