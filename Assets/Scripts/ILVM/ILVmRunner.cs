@@ -21,9 +21,13 @@ namespace ILVM
                 Logger.Error("ILVmRunner: cannot hotfix injected assembly!");
                 return;
             }
-            ILVmManager.ClearMethodInfo();
-
+            ILVmManager.LoadMethodIdFromFile(assemblyHandle);
+            
             var timer = new DebugTimer();
+            timer.Start("Print MethodId");
+            ILVmManager.DumpAllMethodId();
+            timer.Stop();
+
             timer.Start("Load Method");
             var methodNeedFix = new List<MethodDefinition>();
             var moudle = assemblyHandle.GetAssembly().MainModule;

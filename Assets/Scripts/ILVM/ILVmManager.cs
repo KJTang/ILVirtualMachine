@@ -2,7 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
+using System.IO;
 using System.Reflection;
 using System.Linq;
 using Mono.Cecil;
@@ -265,6 +265,10 @@ namespace ILVM
         {
             methodId2methodDef.Clear();
             methodDef2methodId.Clear();
+
+            var filePath = GetMethodIdFilePath();
+            if (File.Exists(filePath))
+                File.Delete(filePath);
         }
 
         public static void AddMethodId(int methodId, MethodDefinition methodDef)
@@ -282,17 +286,156 @@ namespace ILVM
             }
         }
 
+        public static string GetMethodIdFilePath()
+        {
+            var dirPath = Application.dataPath.Replace("/Assets", "/Library/ILVM/");
+            if (!Directory.Exists(dirPath))
+                Directory.CreateDirectory(dirPath);
+            var path = dirPath + "methodId.txt";
+            return path;
+        }
+
+        public static void SaveMethodIdToFile()
+        {
+            var filePath = GetMethodIdFilePath();
+            var fileInfo = new FileInfo(filePath);
+            using (StreamWriter sw = fileInfo.CreateText())
+            {
+                var list = methodId2methodDef.ToList();
+                list.Sort((a, b) => a.Key.CompareTo(b.Key));
+                foreach (var kv in list)
+                {
+                    var signature = MethodDefToString(kv.Value);
+                    sw.WriteLine(string.Format("{0} {1}", kv.Key, signature));
+                }
+            }	
+        }
+
+        public static void LoadMethodIdFromFile(AssemblyHandle assemblyHandle)
+        {
+            methodId2methodDef.Clear();
+            methodDef2methodId.Clear();
+            typeCache.Clear();
+            
+            var filePath = GetMethodIdFilePath();
+            if (!File.Exists(filePath))
+            {
+                Logger.Error("ILVmManager: methodId file not exists! {0}", filePath);
+                return;
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            using (StreamReader sr = fileInfo.OpenText())
+            {
+                var str = "";
+                while ((str = sr.ReadLine()) != null)
+                {
+                    var strLst = str.Split(' ');
+                    var methodId = Int32.Parse(strLst[0]);
+                    var signature = strLst[1];
+                    var methodDef = MethodDefFromString(signature, assemblyHandle);
+                    methodId2methodDef.Add(methodId, methodDef);
+                    methodDef2methodId.Add(methodDef, methodId);
+                }
+            }	
+            typeCache.Clear();
+        }
+
+        private static System.Text.StringBuilder methodSignatureSb = new System.Text.StringBuilder();
+
+        private static string MethodDefToString(MethodDefinition methodDef)
+        {
+            methodSignatureSb.Length = 0;
+
+            // type
+            methodSignatureSb.Append(methodDef.DeclaringType.FullName);
+            methodSignatureSb.Append(";");
+
+            // method name
+            methodSignatureSb.Append(methodDef.Name);
+            methodSignatureSb.Append(";");
+
+            // parameters
+            foreach (var param in methodDef.Parameters)
+            {
+                methodSignatureSb.Append(param.ParameterType.FullName);
+                methodSignatureSb.Append(";");
+            }
+
+            return methodSignatureSb.ToString();
+        }
+
+        private static MethodDefinition MethodDefFromString(string methodSignature, AssemblyHandle assemblyHandle)
+        {
+            var strDataLst = methodSignature.Split(';');
+            var typeName = strDataLst[0];
+            var typeDef = GetTypeDefByName(typeName, assemblyHandle);
+
+            var paramNames = new string[strDataLst.Length - 3];     // the last string is empty
+            for (var i = 2; i < strDataLst.Length - 1; ++i)
+            {
+                paramNames[i - 2] = strDataLst[i];
+            }
+
+            var methodName = strDataLst[1];
+            MethodDefinition methodDef = null;
+            foreach (var method in typeDef.Methods)
+            {
+                if (method.Name != methodName)
+                    continue;
+                if (method.Parameters.Count != paramNames.Length)
+                    continue;
+
+                var matched = true;
+                for (var i = 0; i != paramNames.Length; ++i)
+                {
+                    if (method.Parameters[i].ParameterType.FullName != paramNames[i])
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched)
+                {
+                    methodDef = method;
+                    break;
+                }
+            }
+
+            return methodDef;
+        }
+
+        private static Dictionary<string, TypeDefinition> typeCache = new Dictionary<string, TypeDefinition>(1024);
+        private static TypeDefinition GetTypeDefByName(string typeName, AssemblyHandle assemblyHandle)
+        {
+            TypeDefinition typeDef;
+            if (typeCache.TryGetValue(typeName, out typeDef) && typeDef != null)
+                return typeDef;
+
+            typeDef = assemblyHandle.GetAssembly().MainModule.GetType(typeName);
+            if (typeDef == null)
+            {
+                Logger.Error("ILVmManager: GetTypeDefByName: faild: {0}", typeName);
+                return null;
+            }
+
+            typeCache.Add(typeName, typeDef);
+            return typeDef;
+        }
+
         public static MethodDefinition GetMethodDefById(int methodId)
         {
             MethodDefinition methodDef;
-            methodId2methodDef.TryGetValue(methodId, out methodDef);
+            if (!methodId2methodDef.TryGetValue(methodId, out methodDef))
+                return null;
             return methodDef;
         }
 
         public static int GetMethodIdByDef(MethodDefinition methodDef)
         {
-            int methodId = -1;
-            methodDef2methodId.TryGetValue(methodDef, out methodId);
+            int methodId;
+            if (!methodDef2methodId.TryGetValue(methodDef, out methodId))
+                return -1;
             return methodId;
         }
 

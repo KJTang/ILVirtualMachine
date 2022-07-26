@@ -210,6 +210,10 @@ namespace ILVM
             if (!copySucc)
                 return;
 
+            timer.Start("Save MethodId");
+            ILVmManager.SaveMethodIdToFile();
+            timer.Stop();
+            
             timer.Start("Print MethodId");
             ILVmManager.DumpAllMethodId();
             timer.Stop();
