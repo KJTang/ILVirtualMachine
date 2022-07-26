@@ -16,69 +16,27 @@ namespace ILVM
     // [InitializeOnLoad]
     public static class ILVmEditor 
     {
+        [MenuItem("ILVirtualMachine/Inject", false, 1)]
+        public static void TryInject()
+        {
+            ILVmInjector.Inject();
+        }
+        
 
-        // public static void TryRun()
-        // {
-        //     var timer = new DebugTimer();
-        //     timer.Start("Load Assembly");
-        //     var assemblyHandle = new AssemblyHandle();
-        //     var assembly = assemblyHandle.GetAssembly();
-        //     if (assembly == null)
-        //         return;
-        //     timer.Stop();
+        [MenuItem("ILVirtualMachine/Hotfix", false, 2)]
+        public static void TryHotfix()
+        {
+            ILVmRunner.Hotfix();
+        }
 
-        //     timer.Start("Load Method");
-        //     var methodNeedFix = new List<MethodDefinition>();
-        //     var moudle = assembly.MainModule;
-        //     foreach (var type in moudle.GetTypes())
-        //     {
-        //         if (!type.HasMethods)
-        //             continue;
-
-        //         foreach (var method in type.Methods)
-        //         {
-        //             if (IsNeedFix(method))
-        //                 methodNeedFix.Add(method);
-        //         }
-        //     }
-        //     timer.Stop();
-
-        //     if (methodNeedFix.Count <= 0)
-        //     {
-        //         UnityEngine.Debug.LogFormat("ILVmEditor: no method need fix");
-        //         return;
-        //     }
-
-        //     timer.Start("Print Method");
-        //     foreach (var method in methodNeedFix)
-        //     {
-        //         UnityEngine.Debug.LogFormat("method: {0}", method.DeclaringType, method.Body);
-        //         var methodBody = method.Body;
-        //         foreach (var il in methodBody.Instructions)
-        //         {
-        //             UnityEngine.Debug.LogFormat("il: {0}", il.ToString());
-        //         }
-        //     }
-        //     timer.Stop();
-
-        // }
-
-
-        // private static bool IsNeedFix(MethodDefinition method)
-        // {
-        //     if (!method.HasCustomAttributes)
-        //         return false;
-
-        //     foreach (var attr in method.CustomAttributes)
-        //     {
-		// 		if (attr.Constructor.DeclaringType.Name.StartsWith("PatchAttribute"))
-		// 			return true;
-        //     }
-        //     return false;
-        // }
-
-
-        [MenuItem("ILVirtualMachine/RunTests", false, 1)]
+        [MenuItem("ILVirtualMachine/Clear Hotfix", false, 3)]
+        public static void ClearHotfix()
+        {
+            ILVmRunner.ClearHotfix();
+        }
+        
+        
+        [MenuItem("ILVirtualMachine/RunTests", false, 21)]
         public static void TestVM()
         {
             var assemblyHandle = new AssemblyHandle();
@@ -125,14 +83,6 @@ namespace ILVM
             }
             assemblyHandle.Dispose();
         }
-
-
-        [MenuItem("ILVirtualMachine/TryInject", false, 2)]
-        public static void TestInject()
-        {
-            ILVmInjector.Inject();
-        }
-        
     }
 
 }

@@ -5,6 +5,7 @@ using UnityEngine;
 public class HelloWorld : MonoBehaviour
 {
     // Start is called before the first frame update
+    [ILVM.Hotfix]
     void Start()
     {
         Debug.Log("HelloWorld");

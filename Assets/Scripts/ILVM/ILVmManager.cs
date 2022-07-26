@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using UnityEngine.Assertions;
 
 namespace ILVM
 {
@@ -70,14 +71,16 @@ namespace ILVM
         private AssemblyDefinition assemblyDef;
         private bool assemblyReadSymbols = false;
 
-        public AssemblyHandle()
+        public AssemblyHandle(string overridePath = null)
         {
-            Init();
+            Init(overridePath);
         }
 
-        private void Init()
+        private void Init(string overridePath = null)
         {            
             var path = ILVmManager.GetAssemblyPath();
+            if (!string.IsNullOrEmpty(overridePath))
+                path = overridePath;
 
             // read assembly
             AssemblyDefinition assembly = null;
@@ -90,7 +93,7 @@ namespace ILVM
             catch
             {
                 // read with symbols failed, just don't read them
-                Logger.Log("AssemblyHandle: read assembly with symbol failed: {0}", path);
+                Logger.Log("AssemblyHandle: Warning: read assembly with symbol failed: {0}", path);
                 try
                 {
                     readSymbols = false;
@@ -288,15 +291,19 @@ namespace ILVM
 
         public static int GetMethodIdByDef(MethodDefinition methodDef)
         {
-            int methodId;
+            int methodId = -1;
             methodDef2methodId.TryGetValue(methodDef, out methodId);
             return methodId;
         }
 
 
-        public class MethodInfoWrap
+        public struct MethodInfoWrap
         {
-            private MethodInfo methodInfo;
+            public MethodDefinition methodDef;
+            public bool Invalid
+            {
+                get { return methodDef == null; }
+            }
         }
 
         private static Dictionary<int, MethodInfoWrap> methodInfos = new Dictionary<int, MethodInfoWrap>();
@@ -308,46 +315,67 @@ namespace ILVM
 
         public static void SetMethodInfo(MethodDefinition methodDef)
         {
-            //
+            var methodId = GetMethodIdByDef(methodDef);
+            if (methodId < 0)
+            {
+                Logger.Error("ILVmManager: SetMethodInfo failed: {0}", methodDef);
+                return;
+            }
+
+            var wrap = new MethodInfoWrap();
+            wrap.methodDef = methodDef;
+            methodInfos.Add(methodId, wrap);
+        }
+
+        public static MethodInfoWrap GetMethodInfo(int methodId)
+        {
+            MethodInfoWrap wrap;
+            methodInfos.TryGetValue(methodId, out wrap);
+            return wrap;
         }
 
         public static bool HasMethodInfo(int methodId)
         {
-            return false;
+            return methodInfos.ContainsKey(methodId);
         }
+
+        public static ILVirtualMachine VM
+        {
+            get
+            {
+                if (vm == null)
+                    vm = new ILVirtualMachine();
+                return vm;
+            }
+        }
+        private static ILVirtualMachine vm;
 
         public static void MethodReturnVoidWrapper(object[] objList)
         {
-            //var methodId = (System.Int32) objList[0];
-            //var methodInfo = GetMethodInfo(methodId);
-            //Assert.IsNotNull(methodInfo);
+            var methodId = (System.Int32)objList[0];
+            var methodInfo = GetMethodInfo(methodId);
+            Assert.IsFalse(methodInfo.Invalid);
 
-            //var offset = methodInfo.paramOffset;
-            //var len = objList.Length - offset;
-            //var param = new object[len];
-            //for (var i = 0; i != len; ++i)
-            //    param[i] = objList[i + offset];
-
-            //var instance = objList[1];
-            //methodInfo.methodInfo.Invoke(instance, param);
+            var offset = 1;     // skip methodId
+            var len = objList.Length - offset;
+            var param = new object[len];
+            for (var i = 0; i != len; ++i)
+                param[i] = objList[i + offset];
+            VM.Execute(methodInfo.methodDef.Body.Instructions, param);
         }
 
         public static object MethodReturnObjectWrapper(object[] objList)
         {
-            //var methodId = (System.Int32) objList[0];
-            //var methodInfo = GetMethodInfo(methodId);
-            //Assert.IsNotNull(methodInfo);
-            
-            //var offset = methodInfo.paramOffset;
-            //var len = objList.Length - offset;
-            //var param = new object[len];
-            //for (var i = 0; i != len; ++i)
-            //    param[i] = objList[i + offset];
+            var methodId = (System.Int32)objList[0];
+            var methodInfo = GetMethodInfo(methodId);
+            Assert.IsFalse(methodInfo.Invalid);
 
-            //var instance = objList[1];
-            //return methodInfo.methodInfo.Invoke(instance, param);
-
-            return null;
+            var offset = 1;     // skip methodId
+            var len = objList.Length - offset;
+            var param = new object[len];
+            for (var i = 0; i != len; ++i)
+                param[i] = objList[i + offset];
+            return VM.Execute(methodInfo.methodDef.Body.Instructions, param);
         }
     }
 }
