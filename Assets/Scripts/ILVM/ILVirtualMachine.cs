@@ -259,16 +259,6 @@ namespace ILVM
 
         public ILVirtualMachine() {}
 
-        private static void Log(string message, params object[] args)
-        {
-            UnityEngine.Debug.LogErrorFormat("#ILVM# Debug: " + message, args);
-        }
-
-        private static void Error(string message, params object[] args)
-        {
-            UnityEngine.Debug.LogErrorFormat("#ILVM# " + message, args);
-        }
-
         /// <summary>
         /// execute method ils, note that args[0] must be the obj own this method
         /// </summary>
@@ -286,7 +276,7 @@ namespace ILVM
                 sb.AppendFormat("IL: {0}", il.ToString());
                 sb.AppendLine();
             }
-            Log(sb.ToString());
+            Logger.Log(sb.ToString());
 
             arguments = args;
             machineStack.Clear();
@@ -309,14 +299,14 @@ namespace ILVM
                 var il = ilLst[ebp];
                 SetEBP(ebp + 1);
 
-                Log("Exe IL: {0}", il);
+                Logger.Log("Exe IL: {0}", il);
                 if (!ExecuteIL(il))
                 {
-                    Error("ILRunner: execute il failed, {0}", il);
+                    Logger.Error("ILRunner: execute il failed, {0}", il);
                     succ = false;
                     break;
                 }
-                Log("{0}", machineStack.ToString());
+                Logger.Log("{0}", machineStack.ToString());
             }
 
             object ret = null;
@@ -793,7 +783,7 @@ namespace ILVM
             }
             else
             {
-                Error("ExecuteLdtoken: not support: {0}", il.Operand);
+                Logger.Error("ExecuteLdtoken: not support: {0}", il.Operand);
                 return false;
             }
             return true;
@@ -1650,7 +1640,7 @@ namespace ILVM
             var methodInfo = GetMethodInfoFromMethodReference(methodRef, parameters);
             if (methodInfo == null)
             {
-                Error("ILRunner: Call: cannot find method: {0}", methodRef.FullName);
+                Logger.Error("ILRunner: Call: cannot find method: {0}", methodRef.FullName);
                 return false;
             }
 
@@ -1684,7 +1674,7 @@ namespace ILVM
             }
             catch (Exception e)
             {
-                Error("ILRunner: Call: invoke method failed: {0}, \n{1}", methodRef.FullName, e);
+                Logger.Error("ILRunner: Call: invoke method failed: {0}, \n{1}", methodRef.FullName, e);
                 return false;
             }
 
@@ -1720,7 +1710,7 @@ namespace ILVM
             var propInfo = GetPropInfoFromMethodReference(methodRef);
             if (propInfo == null)
             {
-                Error("ILRunner: CallProp: cannot find prop: {0}", methodRef.FullName);
+                Logger.Error("ILRunner: CallProp: cannot find prop: {0}", methodRef.FullName);
                 return false;
             }
 
@@ -1965,7 +1955,7 @@ namespace ILVM
 
         private bool ExecuteFailed(Instruction il)
         {
-            Error("ILRunner: this opcode not supported yet: {0}", il.ToString());
+            Logger.Error("ILRunner: this opcode not supported yet: {0}", il.ToString());
             return false;
         }
     }

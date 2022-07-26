@@ -1,0 +1,16 @@
+{ 
+"injectClass": [
+], 
+"nameSpaceFilter": [
+		"ILVM",
+		"FlyingWormConsole3",
+		"System", 
+		"UnityEngine",  
+		"UnityEditor" 
+	], 
+"classNameFilter": [
+		"ConsoleProDebug"
+	],
+"methodNameFilter":  [
+	]
+}
