@@ -12,7 +12,8 @@ namespace ILVM
 {
     public class ILVirtualMachine
     {
-        public class VMAddressHandle
+
+        public class VMAddrPool
         {
             public enum AddrType
             {
@@ -21,54 +22,101 @@ namespace ILVM
                 VmStack = 2, 
                 ArrayElem = 3, 
             }
-            private AddrType addrType = AddrType.Invalid;
-            private ILVirtualMachine vm;
-            private int virtualAddrValue = -1;
 
-            private VMAddressHandle() { }
-
-
-            public void SetObj(object obj)
+            public class AddressHandle
             {
-                if (addrType == AddrType.VmVar)
-                    SetVmVar(obj);
-                else if (addrType == AddrType.VmStack)
-                    SetVmStack(obj);
-                else if (addrType == AddrType.ArrayElem)
-                    SetArrayElem(obj);
-                else
-                    throw new Exception("VMAddressHanel: SetObj: cannot set " + addrType.ToString());
-            }
+                public ILVirtualMachine vm;
+                public int virtualAddrValue = -1;
+                public AddrType addrType = AddrType.Invalid;
 
-            public object GetObj()
-            {
-                if (addrType == AddrType.VmVar)
-                    return GetVmVar();
-                else if (addrType == AddrType.VmStack)
-                    return GetVmStack();
-                else if (addrType == AddrType.ArrayElem)
-                    return GetArrayElem();
-                else
-                    throw new Exception("VMAddressHanel: SetObj: cannot set " + addrType.ToString());
+                public AddressHandle() { }
+
+                public void SetObj(object obj)
+                {
+                    if (addrType == AddrType.VmVar)
+                        SetVmVar(obj);
+                    else if (addrType == AddrType.VmStack)
+                        SetVmStack(obj);
+                    else if (addrType == AddrType.ArrayElem)
+                        SetArrayElem(obj);
+                    else
+                        throw new Exception("VMAddressHanel: SetObj: cannot set " + addrType.ToString());
+                }
+
+                public object GetObj()
+                {
+                    if (addrType == AddrType.VmVar)
+                        return GetVmVar();
+                    else if (addrType == AddrType.VmStack)
+                        return GetVmStack();
+                    else if (addrType == AddrType.ArrayElem)
+                        return GetArrayElem();
+                    else
+                        throw new Exception("VMAddressHanel: SetObj: cannot set " + addrType.ToString());
+                }
+
+                #region addrHandle for vm variables
+                public int vmVarIdx = -1;
+                private object GetVmVar()
+                {
+                    var obj = vm.machineVar[vmVarIdx];
+                    return obj;
+                }
+
+                private void SetVmVar(object obj)
+                {
+                    vm.machineVar[vmVarIdx] = obj;
+                }
+                #endregion
+
+                #region addrHandle for vm stack
+                public object vmStackVal = null;
+
+                private object GetVmStack()
+                {
+                    return vmStackVal;
+                }
+
+                private void SetVmStack(object obj)
+                {
+                    vmStackVal = obj;
+                }
+                #endregion
+
+                #region addrHandle for array elements
+                public KeyValuePair<Array, int> arrayKey;
+
+                private object GetArrayElem()
+                {
+                    var obj = arrayKey.Key.GetValue(arrayKey.Value);
+                    return obj;
+                }
+
+                private void SetArrayElem(object obj)
+                {
+                    arrayKey.Key.SetValue(obj, arrayKey.Value);
+                }
+
+                #endregion
             }
 
             #region all addrHandle
-            private static int virtualAddrValueIndexer = -1;
-            private static int GetNewVirtualAddrValueIndex()
+            private int virtualAddrValueIndexer = -1;
+            private int GetNewVirtualAddrValueIndex()
             {
                 virtualAddrValueIndexer = virtualAddrValueIndexer + 1;
                 return virtualAddrValueIndexer;
             }
 
-            private static Dictionary<int, VMAddressHandle> allAddrHandle = new Dictionary<int, VMAddressHandle>();
-            public static void ClearAllAddrHandle()
+            private Dictionary<int, AddressHandle> allAddrHandle = new Dictionary<int, AddressHandle>();
+            public void ClearAllAddrHandle()
             {
                 allAddrHandle.Clear();
             }
 
-            private static VMAddressHandle GetAddrHandle(int virtualAddr)
+            public AddressHandle GetAddrHandle(int virtualAddr)
             {
-                VMAddressHandle addrHandle;
+                AddressHandle addrHandle;
                 if (allAddrHandle.TryGetValue(virtualAddr, out addrHandle))
                 {
                     return addrHandle;
@@ -76,29 +124,29 @@ namespace ILVM
                 return null;
             }
 
-            private static void SetAddrHandle(VMAddressHandle addrHandle)
+            public void SetAddrHandle(AddressHandle addrHandle)
             {
                 addrHandle.virtualAddrValue = GetNewVirtualAddrValueIndex();
                 allAddrHandle.Add(addrHandle.virtualAddrValue, addrHandle);
             }
             #endregion
 
+            
             #region addrHandle for vm variables
-            private static Dictionary<int, VMAddressHandle> vmVarIdx2AddrHandle = new Dictionary<int, VMAddressHandle>();
-            private int vmVarIdx = -1;
+            private Dictionary<int, AddressHandle> vmVarIdx2AddrHandle = new Dictionary<int, AddressHandle>();
 
-            public static VMAddressHandle GetVmVarAddrHandle(ILVirtualMachine vm, int idx)
+            public AddressHandle GetVmVarAddrHandle(ILVirtualMachine vm, int idx)
             {
-                VMAddressHandle addrHandle;
+                AddressHandle addrHandle;
                 vmVarIdx2AddrHandle.TryGetValue(idx, out addrHandle);
                 if (addrHandle == null)
                     addrHandle = CreateVmVarAddrHandle(vm, idx);
                 return addrHandle;
             }
 
-            private static VMAddressHandle CreateVmVarAddrHandle(ILVirtualMachine vm, int idx)
+            private AddressHandle CreateVmVarAddrHandle(ILVirtualMachine vm, int idx)
             {
-                var addrHandle = new VMAddressHandle();
+                var addrHandle = new AddressHandle();
                 addrHandle.vm = vm;
                 addrHandle.addrType = AddrType.VmVar;
                 addrHandle.vmVarIdx = idx;
@@ -106,55 +154,33 @@ namespace ILVM
                 vmVarIdx2AddrHandle.Add(idx, addrHandle);
                 return addrHandle;
             }
-
-            private object GetVmVar()
-            {
-                var obj = vm.machineVar[vmVarIdx];
-                return obj;
-            }
-
-            private void SetVmVar(object obj)
-            {
-                vm.machineVar[vmVarIdx] = obj;
-            }
             #endregion
 
+            
             #region addrHandle for vm stack
-            private object vmStackVal = null;
-
-            public static VMAddressHandle GetVmStackAddrHandle(ILVirtualMachine vm, object val)
+            public AddressHandle GetVmStackAddrHandle(ILVirtualMachine vm, object val)
             {
-                VMAddressHandle addrHandle = CreateVmStackAddrHandle(vm, val);
+                AddressHandle addrHandle = CreateVmStackAddrHandle(vm, val);
                 return addrHandle;
             }
 
-            private static VMAddressHandle CreateVmStackAddrHandle(ILVirtualMachine vm, object val)
+            private AddressHandle CreateVmStackAddrHandle(ILVirtualMachine vm, object val)
             {
-                var addrHandle = new VMAddressHandle();
+                var addrHandle = new AddressHandle();
                 addrHandle.vm = vm;
                 addrHandle.addrType = AddrType.VmStack;
                 addrHandle.vmStackVal = val;
                 SetAddrHandle(addrHandle);
                 return addrHandle;
             }
-
-            private object GetVmStack()
-            {
-                return vmStackVal;
-            }
-
-            private void SetVmStack(object obj)
-            {
-                vmStackVal = obj;
-            }
             #endregion
 
+            
             #region addrHandle for array elements
-            private KeyValuePair<Array, int> arrayKey;
-            private static Dictionary<KeyValuePair<Array, int>, VMAddressHandle> array2AddrHandle = new Dictionary<KeyValuePair<Array, int>, VMAddressHandle>();
-            public static VMAddressHandle GetArrayElemAddrHandle(ILVirtualMachine vm, Array arr, int idx)
+            private Dictionary<KeyValuePair<Array, int>, AddressHandle> array2AddrHandle = new Dictionary<KeyValuePair<Array, int>, AddressHandle>();
+            public AddressHandle GetArrayElemAddrHandle(ILVirtualMachine vm, Array arr, int idx)
             {
-                VMAddressHandle addrHandle;
+                AddressHandle addrHandle;
                 var key = new KeyValuePair<Array, int>(arr, idx);
                 array2AddrHandle.TryGetValue(key, out addrHandle);
                 if (addrHandle == null)
@@ -162,9 +188,9 @@ namespace ILVM
                 return addrHandle;
             }
             
-            private static VMAddressHandle CreateArrayElemAddrHandle(ILVirtualMachine vm, Array arr, int idx)
+            private AddressHandle CreateArrayElemAddrHandle(ILVirtualMachine vm, Array arr, int idx)
             {
-                var addrHandle = new VMAddressHandle();
+                var addrHandle = new AddressHandle();
                 addrHandle.vm = vm;
                 addrHandle.addrType = AddrType.ArrayElem;
                 addrHandle.arrayKey = new KeyValuePair<Array, int>(arr, idx);
@@ -172,18 +198,6 @@ namespace ILVM
                 array2AddrHandle.Add(addrHandle.arrayKey, addrHandle);
                 return addrHandle;
             }
-
-            private object GetArrayElem()
-            {
-                var obj = arrayKey.Key.GetValue(arrayKey.Value);
-                return obj;
-            }
-
-            private void SetArrayElem(object obj)
-            {
-                arrayKey.Key.SetValue(obj, arrayKey.Value);
-            }
-
             #endregion
         }
 
@@ -255,6 +269,8 @@ namespace ILVM
         private VMStack machineStack = new VMStack();
         private object[] machineVar = new object[kArgSize];
 
+        private VMAddrPool addrPool = new VMAddrPool();
+
         private Dictionary<int, int> offset2idx = new Dictionary<int, int>();
 
         public ILVirtualMachine() {}
@@ -280,7 +296,7 @@ namespace ILVM
 
             arguments = args;
             machineStack.Clear();
-            VMAddressHandle.ClearAllAddrHandle();
+            addrPool.ClearAllAddrHandle();
 
             // save offset
             offset2idx.Clear();
@@ -293,7 +309,7 @@ namespace ILVM
             // execute
             var succ = true;
             SetEBP(0);
-            while (GetEBP() < ilLst.Count)
+            while (true)
             {
                 var ebp = GetEBP();
                 var il = ilLst[ebp];
@@ -307,6 +323,9 @@ namespace ILVM
                     break;
                 }
                 Logger.Log("{0}", machineStack.ToString());
+
+                if (il.Next == null)
+                    break;
             }
 
             object ret = null;
@@ -315,7 +334,7 @@ namespace ILVM
             arguments = null;
             machineStack.Clear();
             offset2idx.Clear();
-            VMAddressHandle.ClearAllAddrHandle();
+            addrPool.ClearAllAddrHandle();
             return ret;
         }
 
@@ -641,7 +660,7 @@ namespace ILVM
         private bool ExecuteUnbox(TypeReference typeRef)
         {
             //var val = machineStack.Pop();
-            //var addrHandle = VMAddressHandle.GetVmStackAddrHandle(this, val);
+            //var addrHandle = addrPool.GetVmStackAddrHandle(this, val);
             //machineStack.Push(addrHandle);
             return true;
         }
@@ -683,7 +702,7 @@ namespace ILVM
         {
             var typeDef = il.Operand as TypeDefinition;
             var typeInfo = GetTypeByName(typeDef.FullName);
-            var addrHandle = machineStack.Pop() as VMAddressHandle;
+            var addrHandle = machineStack.Pop() as VMAddrPool.AddressHandle;
             var obj = addrHandle.GetObj();
             if (typeInfo.IsValueType)
                 obj = Activator.CreateInstance(typeInfo);
@@ -768,7 +787,7 @@ namespace ILVM
         {
             var idx = (int)machineStack.Pop();
             var arr = machineStack.Pop() as Array;
-            var addrHandle = VMAddressHandle.GetArrayElemAddrHandle(this, arr, idx);
+            var addrHandle = addrPool.GetArrayElemAddrHandle(this, arr, idx);
             machineStack.Push(addrHandle);
             return true;
         }
@@ -818,7 +837,7 @@ namespace ILVM
 
         private bool ExecuteLoadLocalAddr(int index)
         {
-            var addrHandle = VMAddressHandle.GetVmVarAddrHandle(this, index);
+            var addrHandle = addrPool.GetVmVarAddrHandle(this, index);
             machineStack.Push(addrHandle);
             return true;
         }
@@ -857,7 +876,7 @@ namespace ILVM
             var obj = machineStack.Pop();
 
             // may ref by pointer
-            var addrHandle = obj as VMAddressHandle;
+            var addrHandle = obj as VMAddrPool.AddressHandle;
             if (addrHandle != null)
                 obj = addrHandle.GetObj();
 
@@ -1606,7 +1625,32 @@ namespace ILVM
             return true;
         }
 
-        private bool ExecuteCall(Instruction il)
+        private object InternalCall(Instruction il, MethodInfo methodInfo, object instance, object[] parameters, bool virtualCall)
+        {
+            if (virtualCall)
+                return methodInfo.Invoke(instance, parameters);
+
+            if (instance == null || instance.GetType() == methodInfo.DeclaringType)
+                return methodInfo.Invoke(instance, parameters);
+
+            // 这里比较麻烦，OpCode 里，Call 直接调用对应的函数地址，Callvirt 会进行多态地调用（即调用 instance 实际类型对应的函数；
+            // 但实现上，我们无法使用 DynamicMethod（版本低），Delegate 的方式也无效（https://stackoverflow.com/questions/4357729/use-reflection-to-invoke-an-overridden-base-method）；
+            // 故 hack 处理，将此类函数，也进行虚拟机解释执行；
+            // 以避免在解释执行的函数中调用其基类函数，结果多态调用到自己触发死循环；
+            var methodRef = il.Operand as MethodReference;
+            var methodDef = methodRef.Resolve();
+            var paramCnt = 1 + (parameters != null ? parameters.Length : 0);
+            var paramLst = new object[paramCnt];
+            paramLst[0] = instance;
+            for (var i = 1; i != paramCnt; ++i)
+            {
+                paramLst[i] = parameters[i - 1];
+            }
+            var innerVm = new ILVirtualMachine();
+            return innerVm.Execute(methodDef.Body.Instructions, paramLst);
+        }
+
+        private bool ExecuteCall(Instruction il, bool virtualCall = false)
         {
             var methodRef = il.Operand as MethodReference;
             var methodDef = methodRef.Resolve();
@@ -1616,20 +1660,20 @@ namespace ILVM
                 return ExecuteCallProp(il);
 
             object[] parameters = null;
-            VMAddressHandle[] paramAddrHandles = null;
+            VMAddrPool.AddressHandle[] paramAddrHandles = null;
             if (methodRef.HasParameters)
             {
                 parameters = new object[methodRef.Parameters.Count];
-                paramAddrHandles = new VMAddressHandle[methodRef.Parameters.Count];
+                paramAddrHandles = new VMAddrPool.AddressHandle[methodRef.Parameters.Count];
                 for (var i = 0; i != methodRef.Parameters.Count; ++i)
                 {
                     // cannot know type right now, may runtime bound
                     //var paramType = GetTypeByName(methodRef.Parameters[i].ParameterType.FullName);
                     //var paramVal = Convert.ChangeType(machineStack.Pop(), paramType);
                     var paramVal = machineStack.Pop();
-                    if (paramVal is VMAddressHandle)
+                    if (paramVal is VMAddrPool.AddressHandle)
                     {
-                        var paramAddrHandle = paramVal as VMAddressHandle;
+                        var paramAddrHandle = paramVal as VMAddrPool.AddressHandle;
                         paramAddrHandles[i] = paramAddrHandle;
                         paramVal = paramAddrHandle.GetObj();
                     }
@@ -1645,12 +1689,12 @@ namespace ILVM
             }
 
             object instance = null;
-            VMAddressHandle instAddrHandle = null;
+            VMAddrPool.AddressHandle instAddrHandle = null;
             if (!methodInfo.IsStatic)
                 instance = machineStack.Pop();
-            if (instance is VMAddressHandle)
+            if (instance is VMAddrPool.AddressHandle)
             {
-                instAddrHandle = instance as VMAddressHandle;
+                instAddrHandle = instance as VMAddrPool.AddressHandle;
                 instance = instAddrHandle.GetObj();
             }
 
@@ -1670,7 +1714,7 @@ namespace ILVM
                     }
                     methodInfo = methodInfo.MakeGenericMethod(genericParams);
                 }
-                result = methodInfo.Invoke(instance, parameters);
+                result = InternalCall(il, methodInfo, instance, parameters, virtualCall);
             }
             catch (Exception e)
             {
@@ -1700,7 +1744,7 @@ namespace ILVM
 
         private bool ExecuteCallvirt(Instruction il)
         {
-            return ExecuteCall(il);
+            return ExecuteCall(il, true);
         }
 
         private bool ExecuteCallProp(Instruction il)
@@ -1722,18 +1766,18 @@ namespace ILVM
             }
 
             object[] propIdx = null;
-            VMAddressHandle[] propAddrHandles = null;
+            VMAddrPool.AddressHandle[] propAddrHandles = null;
             var idxParams = propInfo.GetIndexParameters();
             if (idxParams.Length > 0)
             {
                 propIdx = new object[idxParams.Length];
-                propAddrHandles = new VMAddressHandle[idxParams.Length];
+                propAddrHandles = new VMAddrPool.AddressHandle[idxParams.Length];
                 for (var i = 0; i != idxParams.Length; ++i)
                 {
                     var idxVal = machineStack.Pop();
-                    if (idxVal is VMAddressHandle)
+                    if (idxVal is VMAddrPool.AddressHandle)
                     {
-                        var paramAddrHandle = idxVal as VMAddressHandle;
+                        var paramAddrHandle = idxVal as VMAddrPool.AddressHandle;
                         propAddrHandles[i] = paramAddrHandle;
                         idxVal = paramAddrHandle.GetObj();
                     }
@@ -1742,12 +1786,12 @@ namespace ILVM
             }
 
             object instance = null;
-            VMAddressHandle instAddrHandle = null;
+            VMAddrPool.AddressHandle instAddrHandle = null;
             if (!methodDef.IsStatic)
                 instance = machineStack.Pop();
-            if (instance is VMAddressHandle)
+            if (instance is VMAddrPool.AddressHandle)
             {
-                instAddrHandle = instance as VMAddressHandle;
+                instAddrHandle = instance as VMAddrPool.AddressHandle;
                 instance = instAddrHandle.GetObj();
             }
 

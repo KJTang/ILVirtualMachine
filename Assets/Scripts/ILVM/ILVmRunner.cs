@@ -14,7 +14,7 @@ namespace ILVM
     {
         public static void Hotfix()
         {
-            var debugPath = Application.dataPath.Replace("/Assets", "/Library/Debug/Assembly-CSharp.dll");
+            var debugPath = Application.dataPath.Replace("/Assets", "/Library/ILVM/Assembly-CSharp.dll");
             var assemblyHandle = new AssemblyHandle(debugPath);
             if (assemblyHandle.IsInjected())
             {
@@ -22,6 +22,7 @@ namespace ILVM
                 return;
             }
             ILVmManager.LoadMethodIdFromFile(assemblyHandle);
+            ILVmManager.ClearMethodInfo();
             
             var timer = new DebugTimer();
             timer.Start("Print MethodId");
@@ -46,18 +47,18 @@ namespace ILVM
 
             if (methodNeedFix.Count <= 0)
             {
-                UnityEngine.Debug.LogFormat("ILVmRunner: no method need fix");
+                Logger.Error("ILVmRunner: no method need fix");
                 return;
             }
 
             //timer.Start("Print Method");
             //foreach (var method in methodNeedFix)
             //{
-            //    UnityEngine.Debug.LogFormat("method: {0}", method.DeclaringType, method.Body);
+            //    Logger.Log("method: {0}", method.DeclaringType, method.Body);
             //    var methodBody = method.Body;
             //    foreach (var il in methodBody.Instructions)
             //    {
-            //        UnityEngine.Debug.LogFormat("il: {0}", il.ToString());
+            //        Logger.Log("il: {0}", il.ToString());
             //    }
             //}
             //timer.Stop();

@@ -27,7 +27,7 @@ namespace ILVM
             if (finished)
                 return;
             
-            UnityEngine.Debug.LogErrorFormat("Timer: {0} \t{1}ms \t(quit unexpectly)", timerName, stopWatch.ElapsedMilliseconds);
+            Logger.Error("Timer: {0} \t{1}ms \t(quit unexpectly)", timerName, stopWatch.ElapsedMilliseconds);
             stopWatch.Stop();
         }
 
@@ -48,7 +48,7 @@ namespace ILVM
 
             finished = true;
             stopWatch.Stop();
-            UnityEngine.Debug.LogErrorFormat("Timer: {0} \t{1}ms", timerName, stopWatch.ElapsedMilliseconds);
+            Logger.Error("Timer: {0} \t{1}ms", timerName, stopWatch.ElapsedMilliseconds);
         }
     }
 
@@ -56,12 +56,18 @@ namespace ILVM
     {
         public static void Log(string message, params object[] args)
         {
-            UnityEngine.Debug.LogErrorFormat("#ILVM# " + message, args);
+            if (args == null || args.Length <= 0)
+                UnityEngine.Debug.LogError("#ILVM# " + message);
+            else
+                UnityEngine.Debug.LogErrorFormat("#ILVM# " + message, args);
         }
 
         public static void Error(string message, params object[] args)
         {
-            UnityEngine.Debug.LogErrorFormat("#ILVM_ERROR# " + message, args);
+            if (args == null || args.Length <= 0)
+                UnityEngine.Debug.LogError("#ILVM_ERROR# " + message);
+            else
+                UnityEngine.Debug.LogErrorFormat("#ILVM_ERROR# " + message, args);
         }
     }
     

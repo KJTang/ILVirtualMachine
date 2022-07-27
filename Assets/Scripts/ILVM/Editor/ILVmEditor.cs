@@ -19,7 +19,21 @@ namespace ILVM
         [MenuItem("ILVirtualMachine/Inject", false, 1)]
         public static void TryInject()
         {
-            ILVmInjector.Inject();
+            if (EditorApplication.isCompiling || Application.isPlaying)
+            {
+                Logger.Error("ILVMEditor: inject: cannot inject while compiling or playing");
+                return;
+            }
+            EditorUtility.DisplayProgressBar("ILVM Inject", "injecting...", 0);
+            try
+            {
+                ILVmInjector.Inject();
+            }
+            catch(Exception e)
+            {
+                Logger.Error("ILVMEditor: inject: {0}", e.ToString());
+            }
+            EditorUtility.ClearProgressBar();
         }
         
 
@@ -34,6 +48,37 @@ namespace ILVM
         {
             ILVmRunner.ClearHotfix();
         }
+
+        [MenuItem("ILVirtualMachine/TestCode", false, 41)]
+        public static unsafe void TestCode()
+        {
+            //var testTnst = (ILVMTest.Test_InvokeBaseMethod)Activator.CreateInstance(typeof(ILVMTest.Test_InvokeBaseMethod));
+            var testInst = new ILVMTest.Test_InvokeBaseMethod();
+            var baseInst = (ILVMTest.Inner_Test_InvokeBaseMethodBase)testInst;
+            //var baseInst = new ILVMTest.Inner_Test_InvokeBaseMethodBase();
+
+            var methodInfoBase = typeof(ILVMTest.Inner_Test_InvokeBaseMethodBase).GetMethod("Func");
+            var methodInfoTest = typeof(ILVMTest.Test_InvokeBaseMethod).GetMethod("Func");
+
+            var methodBasePtr = methodInfoBase.MethodHandle.GetFunctionPointer();
+            var methodTestPtr = methodInfoTest.MethodHandle.GetFunctionPointer();
+
+            var methodBaseNew = (Func<string>)Activator.CreateInstance(typeof(Func<string>), baseInst, methodBasePtr);
+            var methodTestNew = (Func<string>)Activator.CreateInstance(typeof(Func<string>), testInst, methodTestPtr);
+
+            var delegateBase = Delegate.CreateDelegate(typeof(Func<string>), baseInst, methodInfoBase, false);
+            var delegateTest = Delegate.CreateDelegate(typeof(Func<string>), testInst, methodInfoTest, false);
+
+            Logger.Error("Ret Base: {0}", (string)methodInfoBase.Invoke(baseInst, null));
+            Logger.Error("Ret Test: {0}", (string)methodInfoTest.Invoke(testInst, null));
+            
+            Logger.Error("Ret Base New: {0} \t{1}", methodBaseNew(), methodBasePtr);
+            Logger.Error("Ret Test New: {0} \t{1}", methodTestNew(), methodTestPtr);
+            
+            Logger.Error("Ret Base Delegate: {0}", delegateBase.DynamicInvoke(null));
+            Logger.Error("Ret Test Delegate: {0}", delegateTest.DynamicInvoke(null));
+        }
+        
         
         
         [MenuItem("ILVirtualMachine/RunTests", false, 21)]
