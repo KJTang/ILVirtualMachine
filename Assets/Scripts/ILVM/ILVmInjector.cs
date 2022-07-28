@@ -31,8 +31,17 @@ namespace ILVM
             filterNamespace.Clear();
             filterClass.Clear();
             filterMethod.Clear();
-
-            var jsonData = File.ReadAllText(Application.dataPath + "/Scripts/ILVM/Editor/ILVmInjectConfig.json");
+            
+            string jsonData = null;
+            var files = Directory.GetFiles(Application.dataPath, "ILVmInjectConfig.json", SearchOption.AllDirectories);
+            foreach (var file in files)
+            { 
+                if (file.EndsWith("ILVmInjectConfig.json"))
+                {
+                    jsonData = File.ReadAllText(Application.dataPath + "/Scripts/ILVM/Editor/ILVmInjectConfig.json");
+                    break;
+                }
+            }
             var filter = JsonUtility.FromJson<ILVmInjectConfig>(jsonData);
             
             foreach (var name in filter.injectClass)
@@ -119,139 +128,107 @@ namespace ILVM
 
         public static void Inject()
         {
-            var assemblyHandle = new AssemblyHandle();
-            if (assemblyHandle.IsInjected())
+            using (var assemblyHandle = new AssemblyHandle())
             {
-                Logger.Error("ILVmInjector: assembly has already injected!");
-                return;
-            }
-            ILVmManager.ClearMethodId();
-
-            var timer = new DebugTimer();
-            timer.Start("Get Type To Inject");
-            var type2Inject = new HashSet<string>();
-            foreach (var typeInfo in GetTypeToInject())
-            {
-                type2Inject.Add(typeInfo.FullName);
-            }
-            timer.Stop();
-
-            timer.Start("Get Method To Inject");
-            var method2Inject = new List<MethodDefinition>();
-            foreach (var typeDef in assemblyHandle.GetAssembly().MainModule.GetTypes())
-            {
-                if (!type2Inject.Contains(typeDef.FullName))
-                    continue;
-
-                foreach (var methodDef in typeDef.Methods)
+                if (assemblyHandle.IsInjected())
                 {
-                    if (!FilterMethod(methodDef))
+                    Logger.Error("ILVmInjector: assembly has already injected!");
+                    return;
+                }
+                ILVmManager.ClearMethodId();
+
+                var timer = new DebugTimer();
+                timer.Start("Get Type To Inject");
+                var type2Inject = new HashSet<string>();
+                foreach (var typeInfo in GetTypeToInject())
+                {
+                    type2Inject.Add(typeInfo.FullName);
+                }
+                timer.Stop();
+
+                timer.Start("Get Method To Inject");
+                var method2Inject = new List<MethodDefinition>();
+                foreach (var typeDef in assemblyHandle.GetAssembly().MainModule.GetTypes())
+                {
+                    if (!type2Inject.Contains(typeDef.FullName))
                         continue;
-                    method2Inject.Add(methodDef);
-                }
-            }
-            timer.Stop();
 
-            timer.Start("Inject Method");
-            var succ = true;
-            try
-            {
-                for (var i = 0; i != method2Inject.Count; ++i)
-                {
-                    var methodDef = method2Inject[i];
-                    InjectMethod(i, methodDef, assemblyHandle);
+                    foreach (var methodDef in typeDef.Methods)
+                    {
+                        if (!FilterMethod(methodDef))
+                            continue;
+                        method2Inject.Add(methodDef);
+                    }
                 }
+                timer.Stop();
+
+                timer.Start("Inject Method");
+                var succ = true;
+                try
+                {
+                    for (var i = 0; i != method2Inject.Count; ++i)
+                    {
+                        var methodDef = method2Inject[i];
+                        InjectMethod(i, methodDef, assemblyHandle);
+                    }
                 
-                // mark as injected
-                assemblyHandle.SetIsInjected();
+                    // mark as injected
+                    assemblyHandle.SetIsInjected();
 
-                // modify assembly
-                assemblyHandle.Write();
+                    // modify assembly
+                    assemblyHandle.Write();
 
-                // save method id
-                for (var i = 0; i != method2Inject.Count; ++i)
-                {
-                    var methodDef = method2Inject[i];
-                    ILVmManager.AddMethodId(i, methodDef);
+                    // save method id
+                    for (var i = 0; i != method2Inject.Count; ++i)
+                    {
+                        var methodDef = method2Inject[i];
+                        ILVmManager.AddMethodId(i, methodDef);
+                    }
                 }
-            }
-            catch (Exception e)
-            {
-                succ = false;
-                Logger.Error("ILVmInjector: inject failed: \n{0}", e.ToString());
-            }
-            assemblyHandle.Dispose();
-            assemblyHandle = null;
-            timer.Stop();
-            if (!succ)
-                return;
-
+                catch (Exception e)
+                {
+                    succ = false;
+                    Logger.Error("ILVmInjector: inject failed: \n{0}", e.ToString());
+                }
+                timer.Stop();
+                if (!succ)
+                    return;
             
-            timer.Start("Copy Assembly");
-            var copySucc = true;
-            try
-            {
-                var assemblyPath = ILVmManager.GetAssemblyPath();
-                var assemblyHotfixPath = ILVmManager.GetAssemblyHotfixPath();;
-                var assemblyPDBPath = assemblyPath.Replace(".dll", ".pdb");
-                var assemblyHotfixPDBPath = assemblyHotfixPath.Replace(".dll", ".pdb");
-                Logger.Log("assemblyPath: {0} \t{1}", assemblyPath, assemblyPDBPath);
-                Logger.Log("assemblyHotfixPath: {0} \t{1}", assemblyHotfixPath, assemblyHotfixPDBPath);
+                timer.Start("Copy Assembly");
+                assemblyHandle.Dispose();       // release before copy
+                var copySucc = true;
+                try
+                {
+                    var assemblyPath = ILVmManager.GetAssemblyPath();
+                    var assemblyHotfixPath = ILVmManager.GetAssemblyHotfixPath();;
+                    var assemblyPDBPath = assemblyPath.Replace(".dll", ".pdb");
+                    var assemblyHotfixPDBPath = assemblyHotfixPath.Replace(".dll", ".pdb");
+                    Logger.Log("assemblyPath: {0} \t{1}", assemblyPath, assemblyPDBPath);
+                    Logger.Log("assemblyHotfixPath: {0} \t{1}", assemblyHotfixPath, assemblyHotfixPDBPath);
 
-                System.IO.File.Copy(assemblyHotfixPath, assemblyPath, true);
-                System.IO.File.Copy(assemblyHotfixPDBPath, assemblyPDBPath, true);
-            }
-            catch (Exception e)
-            {
-                copySucc = false;
-                Logger.Error("ILVmInjector: override assembly failed: {0}", e);
-            }
-            timer.Stop();
-            if (!copySucc)
-                return;
+                    System.IO.File.Copy(assemblyHotfixPath, assemblyPath, true);
+                    System.IO.File.Copy(assemblyHotfixPDBPath, assemblyPDBPath, true);
+                }
+                catch (Exception e)
+                {
+                    copySucc = false;
+                    Logger.Error("ILVmInjector: override assembly failed: {0}", e);
+                }
+                timer.Stop();
+                if (!copySucc)
+                    return;
 
-            timer.Start("Save MethodId");
-            ILVmManager.SaveMethodIdToFile();
-            timer.Stop();
+                timer.Start("Save MethodId");
+                ILVmManager.SaveMethodIdToFile();
+                timer.Stop();
             
-            timer.Start("Print MethodId");
-            ILVmManager.DumpAllMethodId();
-            timer.Stop();
+                timer.Start("Print MethodId");
+                ILVmManager.DumpAllMethodId();
+                timer.Stop();
 
-
-            Logger.Error("ILVmInjector: inject assembly succ");
+                Logger.Error("ILVmInjector: inject assembly succ");
+            }
         }
-        
-        //private static MethodInfo FindMethodInfoInType(Type type, MethodDefinition methodDef)
-        //{
-        //    MethodInfo methodInfo = null;
-        //    foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
-        //    {
-        //        if (method.Name != methodDef.Name)
-        //            continue;
-        //        if (method.GetParameters().Length != methodDef.Parameters.Count)
-        //            continue;
-
-        //        var matched = true;
-        //        for (var i = 0; i != methodDef.Parameters.Count; ++i)
-        //        {
-        //            var param = method.GetParameters()[i];
-        //            var paramDef = methodDef.Parameters[i];
-        //            if (param.ParameterType.FullName != paramDef.ParameterType.FullName)
-        //            {
-        //                matched = false;
-        //                break;
-        //            }
-        //        }
-        //        if (matched)
-        //        {
-        //            methodInfo = method;
-        //            break;
-        //        }
-        //    }
-        //    return methodInfo;
-        //}
-
         
         private static void InjectMethod(int methodId, MethodDefinition method, AssemblyHandle assemblyHandle)
         {

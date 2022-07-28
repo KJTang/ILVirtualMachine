@@ -365,6 +365,8 @@ namespace ILVM
                     return ExecuteUnbox(il.Operand as TypeReference);
                 case Code.Pop: 
                     return ExecutePop();
+                case Code.Throw: 
+                    return ExecuteThrow();
 
                 case Code.Newobj:
                     return ExecuteNewobj(il.Operand as MethodReference);
@@ -669,6 +671,12 @@ namespace ILVM
         {
             machineStack.Pop();
             return true;
+        }
+
+        private bool ExecuteThrow()
+        {
+            var e = machineStack.Pop() as System.Exception;
+            throw e;
         }
 
         private bool ExecuteNewobj(MethodReference methodRef)
@@ -1630,7 +1638,8 @@ namespace ILVM
             if (virtualCall)
                 return methodInfo.Invoke(instance, parameters);
 
-            if (instance == null || instance.GetType() == methodInfo.DeclaringType)
+            var instType = instance?.GetType();
+            if (instType == null || instType == methodInfo.DeclaringType || typeof(System.Type).IsAssignableFrom(instType))
                 return methodInfo.Invoke(instance, parameters);
 
             // 这里比较麻烦，OpCode 里，Call 直接调用对应的函数地址，Callvirt 会进行多态地调用（即调用 instance 实际类型对应的函数；

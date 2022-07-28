@@ -15,61 +15,63 @@ namespace ILVM
         public static void Hotfix()
         {
             var debugPath = Application.dataPath.Replace("/Assets", "/Library/ILVM/Assembly-CSharp.dll");
-            var assemblyHandle = new AssemblyHandle(debugPath);
-            if (assemblyHandle.IsInjected())
+            using (var assemblyHandle = new AssemblyHandle(debugPath))
             {
-                Logger.Error("ILVmRunner: cannot hotfix injected assembly!");
-                return;
-            }
-            ILVmManager.LoadMethodIdFromFile(assemblyHandle);
-            ILVmManager.ClearMethodInfo();
-            
-            var timer = new DebugTimer();
-            timer.Start("Print MethodId");
-            ILVmManager.DumpAllMethodId();
-            timer.Stop();
-
-            timer.Start("Load Method");
-            var methodNeedFix = new List<MethodDefinition>();
-            var moudle = assemblyHandle.GetAssembly().MainModule;
-            foreach (var type in moudle.GetTypes())
-            {
-                if (!type.HasMethods)
-                    continue;
-
-                foreach (var method in type.Methods)
+                if (assemblyHandle.IsInjected())
                 {
-                    if (IsNeedFix(method))
-                        methodNeedFix.Add(method);
+                    Logger.Error("ILVmRunner: cannot hotfix injected assembly!");
+                    return;
                 }
-            }
-            timer.Stop();
+                ILVmManager.LoadMethodIdFromFile(assemblyHandle);
+                ILVmManager.ClearMethodInfo();
+            
+                var timer = new DebugTimer();
+                timer.Start("Print MethodId");
+                ILVmManager.DumpAllMethodId();
+                timer.Stop();
 
-            if (methodNeedFix.Count <= 0)
-            {
-                Logger.Error("ILVmRunner: no method need fix");
-                return;
-            }
+                timer.Start("Load Method");
+                var methodNeedFix = new List<MethodDefinition>();
+                var moudle = assemblyHandle.GetAssembly().MainModule;
+                foreach (var type in moudle.GetTypes())
+                {
+                    if (!type.HasMethods)
+                        continue;
 
-            //timer.Start("Print Method");
-            //foreach (var method in methodNeedFix)
-            //{
-            //    Logger.Log("method: {0}", method.DeclaringType, method.Body);
-            //    var methodBody = method.Body;
-            //    foreach (var il in methodBody.Instructions)
-            //    {
-            //        Logger.Log("il: {0}", il.ToString());
-            //    }
-            //}
-            //timer.Stop();
+                    foreach (var method in type.Methods)
+                    {
+                        if (IsNeedFix(method))
+                            methodNeedFix.Add(method);
+                    }
+                }
+                timer.Stop();
 
-            timer.Start("Hotfix Method");
-            foreach (var method in methodNeedFix)
-            {
-                ILVmManager.SetMethodInfo(method);
-                Logger.Log("ILVmRunner: hotfix method: {0}", method);
+                if (methodNeedFix.Count <= 0)
+                {
+                    Logger.Error("ILVmRunner: no method need fix");
+                    return;
+                }
+
+                //timer.Start("Print Method");
+                //foreach (var method in methodNeedFix)
+                //{
+                //    Logger.Log("method: {0}", method.DeclaringType, method.Body);
+                //    var methodBody = method.Body;
+                //    foreach (var il in methodBody.Instructions)
+                //    {
+                //        Logger.Log("il: {0}", il.ToString());
+                //    }
+                //}
+                //timer.Stop();
+
+                timer.Start("Hotfix Method");
+                foreach (var method in methodNeedFix)
+                {
+                    ILVmManager.SetMethodInfo(method);
+                    Logger.Log("ILVmRunner: hotfix method: {0}", method);
+                }
+                timer.Stop();
             }
-            timer.Stop();
         }
 
         public static void ClearHotfix()

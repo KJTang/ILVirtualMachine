@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ILVMTest {
 
-    public class Test_InvokeMehtodWithOutParam
+    public class Test_InvokeMethodWithOutParam
     {
         public string Func()
         {
@@ -15,7 +15,7 @@ namespace ILVMTest {
             args[0] = len;
             args[1] = lst;
 
-            var method = typeof(Test_InvokeMehtodWithOutParam).GetMethod("Foo");
+            var method = typeof(Test_InvokeMethodWithOutParam).GetMethod("Foo");
             method.Invoke(this, args);
 
             if (len == (args[1] as List<object>).Count)
