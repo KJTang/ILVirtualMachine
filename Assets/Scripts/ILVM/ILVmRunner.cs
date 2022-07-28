@@ -12,10 +12,17 @@ namespace ILVM
 {
     public class ILVmRunner
     {
+        private static AssemblyHandle currentAssembly;
+
         public static void Hotfix()
         {
+            if (currentAssembly != null)
+                currentAssembly.Dispose();
+            currentAssembly = null;
+
             var debugPath = Application.dataPath.Replace("/Assets", "/Library/ILVM/Assembly-CSharp.dll");
-            using (var assemblyHandle = new AssemblyHandle(debugPath))
+            var assemblyHandle = new AssemblyHandle(debugPath);
+            try
             {
                 if (assemblyHandle.IsInjected())
                 {
@@ -72,11 +79,22 @@ namespace ILVM
                 }
                 timer.Stop();
             }
+            catch (Exception e)
+            {
+                if (assemblyHandle != null)
+                    assemblyHandle.Dispose();
+                assemblyHandle = null;
+            }
+
+            currentAssembly = assemblyHandle;
         }
 
         public static void ClearHotfix()
         {
             ILVmManager.ClearMethodInfo();
+            if (currentAssembly != null)
+                currentAssembly.Dispose();
+            currentAssembly = null;
         }
 
 

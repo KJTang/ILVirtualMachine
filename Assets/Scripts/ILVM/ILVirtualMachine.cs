@@ -268,6 +268,7 @@ namespace ILVM
 
         private VMStack machineStack = new VMStack();
         private object[] machineVar = new object[kArgSize];
+        private Type[] machineVarType = new Type[kArgSize];
 
         private VMAddrPool addrPool = new VMAddrPool();
 
@@ -278,11 +279,11 @@ namespace ILVM
         /// <summary>
         /// execute method ils, note that args[0] must be the obj own this method
         /// </summary>
-        /// <param name="ilLst"></param>
-        /// <param name="args"></param>
         /// <returns></returns>
-        public object Execute(IList<Instruction> ilLst, object[] args)
+        public object Execute(MethodDefinition methodDef, object[] args)
         {
+            var ilLst = methodDef.Body.Instructions;
+
             // Print all IL
             var sb = new System.Text.StringBuilder();
             sb.AppendFormat("============================ execute new: {0} \t{1}", args != null ? args[0].GetType().ToString() : "null", ilLst.Count);
@@ -297,6 +298,7 @@ namespace ILVM
             arguments = args;
             machineStack.Clear();
             addrPool.ClearAllAddrHandle();
+            InitLocalVar(methodDef);
 
             // save offset
             offset2idx.Clear();
@@ -346,6 +348,17 @@ namespace ILVM
         private int GetEBP()
         {
             return ebp;
+        }
+
+        private void InitLocalVar(MethodDefinition methodDef)
+        {
+            var varLst = methodDef.Body.Variables;
+            for (var i = 0; i != varLst.Count; ++i)
+            {
+                var varDef = varLst[i];
+                machineVar[i] = null;
+                machineVarType[i] = GetTypeInfoFromTypeReference(varDef.VariableType);
+            }
         }
 
         private bool ExecuteIL(Instruction il)
@@ -833,7 +846,24 @@ namespace ILVM
 
         private bool ExecuteStoreLocal(int index)
         {
-            machineVar[index] = machineStack.Pop();
+            var objVar = machineStack.Pop();
+            var curType = objVar.GetType();
+            var tarType = machineVarType[index];
+            object result = objVar;
+            if (!tarType.IsAssignableFrom(curType))
+            {
+                // hack here, handle store int to bool type
+                if (tarType == typeof(Boolean))
+                {
+                    result = (Int32)Convert.ChangeType(objVar, typeof(Int32)) != 0;
+                }
+                else
+                {
+                    result = Convert.ChangeType(objVar, tarType);
+                }
+            }
+
+            machineVar[index] = result;
             return true;
         }
 
@@ -1656,7 +1686,7 @@ namespace ILVM
                 paramLst[i] = parameters[i - 1];
             }
             var innerVm = new ILVirtualMachine();
-            return innerVm.Execute(methodDef.Body.Instructions, paramLst);
+            return innerVm.Execute(methodDef, paramLst);
         }
 
         private bool ExecuteCall(Instruction il, bool virtualCall = false)

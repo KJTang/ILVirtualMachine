@@ -54,8 +54,13 @@ namespace ILVM
 
     public class Logger
     {
+        public static bool EnableLog = true;
+
         public static void Log(string message, params object[] args)
         {
+            if (!EnableLog)
+                return;
+
             if (args == null || args.Length <= 0)
                 UnityEngine.Debug.LogError("#ILVM# " + message);
             else
@@ -510,7 +515,7 @@ namespace ILVM
             var param = new object[len];
             for (var i = 0; i != len; ++i)
                 param[i] = objList[i + offset];
-            VM.Execute(methodInfo.methodDef.Body.Instructions, param);
+            VM.Execute(methodInfo.methodDef, param);
         }
 
         public static object MethodReturnObjectWrapper(object[] objList)
@@ -524,7 +529,7 @@ namespace ILVM
             var param = new object[len];
             for (var i = 0; i != len; ++i)
                 param[i] = objList[i + offset];
-            return VM.Execute(methodInfo.methodDef.Body.Instructions, param);
+            return VM.Execute(methodInfo.methodDef, param);
         }
     }
 }

@@ -6,8 +6,16 @@ namespace ILVMTest {
 
     public class Test_InvokeMethodWithOutParam
     {
+        public bool bValue = false;
+
         public string Func()
         {
+            var b = true;
+            var fieldInfo = typeof(Test_InvokeMethodWithOutParam).GetField("bValue");
+            fieldInfo.SetValue(this, b);
+            if (bValue == false)
+                return "invalid";
+
             int len = 5;
             List<object> lst = new List<object>();
 

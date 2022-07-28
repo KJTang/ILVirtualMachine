@@ -109,7 +109,7 @@ namespace ILVM
 
                         var vmClsInst = Activator.CreateInstance(method.DeclaringType);
                         var parameters = new object[] { vmClsInst };
-                        var vmRet = vm.Execute(methodTypeDef.Body.Instructions, parameters);
+                        var vmRet = vm.Execute(methodTypeDef, parameters);
                         Logger.Error("#ILVM_Test# {0} \treflection ret: {1} \tvm ret: {2} \tsucc: {3}", method.DeclaringType, rfRet, vmRet, (string)rfRet == (string)vmRet ? "<color=green>succ</color>" :  "<color=red>failed</color>");
                     }
                 }
