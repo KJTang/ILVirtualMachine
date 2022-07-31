@@ -1,6 +1,7 @@
-{ 
-"injectClass": [
-], 
+{
+  "injectClass": [
+	"HelloWorld"
+  ], 
 "nameSpaceFilter": [
 		"ILVM",
 		"FlyingWormConsole3",

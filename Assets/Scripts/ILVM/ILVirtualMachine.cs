@@ -7,270 +7,137 @@ using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
+using UnityEngine.Assertions;
 
 namespace ILVM
 {
+    public class VMAddr : IDisposable
+    {
+        private object obj;
+        private ulong addrIdx = 0;
+
+        private VMAddr(object o)
+        {
+            obj = o;
+            AddAddr(this);
+        }
+
+        public void SetObj(object o)
+        {
+            obj = o;
+        }
+
+        public object GetObj()
+        {
+            return obj;
+        }
+
+        public void Dispose()
+        {
+            obj = null;
+            DelAddr(this);
+        }
+
+        private static Dictionary<ulong, VMAddr> addrDict = new Dictionary<ulong, VMAddr>();
+        private static ulong addrIndexer = 0;
+
+        public static VMAddr Create(object o)
+        {
+            if (o is VMAddr)
+                return o as VMAddr;
+
+            var addr = new VMAddr(o);
+            return addr;
+        }
+
+        public static void Clear()
+        {
+            addrDict.Clear();
+        }
+
+        private static void AddAddr(VMAddr addr)
+        {
+            addr.addrIdx = addrIndexer++;
+            addrDict.Add(addr.addrIdx, addr);
+        }
+
+        private static void DelAddr(VMAddr addr)
+        {
+            addrDict.Remove(addr.addrIdx);
+        }
+    }
+
+    public class VMStack : IEnumerable
+    {
+        private List<object> innerList = new List<object>(32);
+
+        public int Count
+        {
+            get { return innerList.Count; }
+        }
+
+        public void Push(object val)
+        {
+            innerList.Add(val);
+        }
+
+        public object Pop()
+        {
+            var val = innerList[innerList.Count - 1];
+            innerList.RemoveAt(innerList.Count - 1);
+            return val;
+        }
+
+        public object Peek()
+        {
+            var val = innerList[innerList.Count - 1];
+            return val;
+        }
+
+        public object GetValue(int index)
+        {
+            return innerList[index];
+        }
+
+        public void SetValue(int index, object val)
+        {
+            innerList[index] = val;
+        }
+
+        public void Clear()
+        {
+            innerList.Clear();
+        }
+
+        public IEnumerator GetEnumerator()
+        {
+            return innerList.GetEnumerator();
+        }
+
+
+        private System.Text.StringBuilder sb = new StringBuilder();
+        public override string ToString()
+        {
+            sb.Length = 0;
+            sb.AppendFormat("Stack({0}): ", innerList.Count);
+            foreach (var obj in innerList)
+            {
+                sb.Append(obj != null ? obj.ToString() : "null");
+                sb.Append(";");
+            }
+            return sb.ToString();
+        }
+    }
+
     public class ILVirtualMachine
     {
-
-        public class VMAddrPool
-        {
-            public enum AddrType
-            {
-                Invalid = 0, 
-                VmVar = 1, 
-                VmStack = 2, 
-                ArrayElem = 3, 
-            }
-
-            public class AddressHandle
-            {
-                public ILVirtualMachine vm;
-                public int virtualAddrValue = -1;
-                public AddrType addrType = AddrType.Invalid;
-
-                public AddressHandle() { }
-
-                public void SetObj(object obj)
-                {
-                    if (addrType == AddrType.VmVar)
-                        SetVmVar(obj);
-                    else if (addrType == AddrType.VmStack)
-                        SetVmStack(obj);
-                    else if (addrType == AddrType.ArrayElem)
-                        SetArrayElem(obj);
-                    else
-                        throw new Exception("VMAddressHanel: SetObj: cannot set " + addrType.ToString());
-                }
-
-                public object GetObj()
-                {
-                    if (addrType == AddrType.VmVar)
-                        return GetVmVar();
-                    else if (addrType == AddrType.VmStack)
-                        return GetVmStack();
-                    else if (addrType == AddrType.ArrayElem)
-                        return GetArrayElem();
-                    else
-                        throw new Exception("VMAddressHanel: SetObj: cannot set " + addrType.ToString());
-                }
-
-                #region addrHandle for vm variables
-                public int vmVarIdx = -1;
-                private object GetVmVar()
-                {
-                    var obj = vm.machineVar[vmVarIdx];
-                    return obj;
-                }
-
-                private void SetVmVar(object obj)
-                {
-                    vm.machineVar[vmVarIdx] = obj;
-                }
-                #endregion
-
-                #region addrHandle for vm stack
-                public object vmStackVal = null;
-
-                private object GetVmStack()
-                {
-                    return vmStackVal;
-                }
-
-                private void SetVmStack(object obj)
-                {
-                    vmStackVal = obj;
-                }
-                #endregion
-
-                #region addrHandle for array elements
-                public KeyValuePair<Array, int> arrayKey;
-
-                private object GetArrayElem()
-                {
-                    var obj = arrayKey.Key.GetValue(arrayKey.Value);
-                    return obj;
-                }
-
-                private void SetArrayElem(object obj)
-                {
-                    arrayKey.Key.SetValue(obj, arrayKey.Value);
-                }
-
-                #endregion
-            }
-
-            #region all addrHandle
-            private int virtualAddrValueIndexer = -1;
-            private int GetNewVirtualAddrValueIndex()
-            {
-                virtualAddrValueIndexer = virtualAddrValueIndexer + 1;
-                return virtualAddrValueIndexer;
-            }
-
-            private Dictionary<int, AddressHandle> allAddrHandle = new Dictionary<int, AddressHandle>();
-            public void ClearAllAddrHandle()
-            {
-                allAddrHandle.Clear();
-            }
-
-            public AddressHandle GetAddrHandle(int virtualAddr)
-            {
-                AddressHandle addrHandle;
-                if (allAddrHandle.TryGetValue(virtualAddr, out addrHandle))
-                {
-                    return addrHandle;
-                }
-                return null;
-            }
-
-            public void SetAddrHandle(AddressHandle addrHandle)
-            {
-                addrHandle.virtualAddrValue = GetNewVirtualAddrValueIndex();
-                allAddrHandle.Add(addrHandle.virtualAddrValue, addrHandle);
-            }
-            #endregion
-
-            
-            #region addrHandle for vm variables
-            private Dictionary<int, AddressHandle> vmVarIdx2AddrHandle = new Dictionary<int, AddressHandle>();
-
-            public AddressHandle GetVmVarAddrHandle(ILVirtualMachine vm, int idx)
-            {
-                AddressHandle addrHandle;
-                vmVarIdx2AddrHandle.TryGetValue(idx, out addrHandle);
-                if (addrHandle == null)
-                    addrHandle = CreateVmVarAddrHandle(vm, idx);
-                return addrHandle;
-            }
-
-            private AddressHandle CreateVmVarAddrHandle(ILVirtualMachine vm, int idx)
-            {
-                var addrHandle = new AddressHandle();
-                addrHandle.vm = vm;
-                addrHandle.addrType = AddrType.VmVar;
-                addrHandle.vmVarIdx = idx;
-                SetAddrHandle(addrHandle);
-                vmVarIdx2AddrHandle.Add(idx, addrHandle);
-                return addrHandle;
-            }
-            #endregion
-
-            
-            #region addrHandle for vm stack
-            public AddressHandle GetVmStackAddrHandle(ILVirtualMachine vm, object val)
-            {
-                AddressHandle addrHandle = CreateVmStackAddrHandle(vm, val);
-                return addrHandle;
-            }
-
-            private AddressHandle CreateVmStackAddrHandle(ILVirtualMachine vm, object val)
-            {
-                var addrHandle = new AddressHandle();
-                addrHandle.vm = vm;
-                addrHandle.addrType = AddrType.VmStack;
-                addrHandle.vmStackVal = val;
-                SetAddrHandle(addrHandle);
-                return addrHandle;
-            }
-            #endregion
-
-            
-            #region addrHandle for array elements
-            private Dictionary<KeyValuePair<Array, int>, AddressHandle> array2AddrHandle = new Dictionary<KeyValuePair<Array, int>, AddressHandle>();
-            public AddressHandle GetArrayElemAddrHandle(ILVirtualMachine vm, Array arr, int idx)
-            {
-                AddressHandle addrHandle;
-                var key = new KeyValuePair<Array, int>(arr, idx);
-                array2AddrHandle.TryGetValue(key, out addrHandle);
-                if (addrHandle == null)
-                    addrHandle = CreateArrayElemAddrHandle(vm, arr, idx);
-                return addrHandle;
-            }
-            
-            private AddressHandle CreateArrayElemAddrHandle(ILVirtualMachine vm, Array arr, int idx)
-            {
-                var addrHandle = new AddressHandle();
-                addrHandle.vm = vm;
-                addrHandle.addrType = AddrType.ArrayElem;
-                addrHandle.arrayKey = new KeyValuePair<Array, int>(arr, idx);
-                SetAddrHandle(addrHandle);
-                array2AddrHandle.Add(addrHandle.arrayKey, addrHandle);
-                return addrHandle;
-            }
-            #endregion
-        }
-
-        public class VMStack : IEnumerable
-        {
-            private List<object> innerList = new List<object>(32);
-
-            public int Count
-            {
-                get { return innerList.Count; }
-            }
-
-            public void Push(object val)
-            {
-                innerList.Add(val);
-            }
-
-            public object Pop()
-            {
-                var val = innerList[innerList.Count - 1];
-                innerList.RemoveAt(innerList.Count - 1);
-                return val;
-            }
-
-            public object Peek()
-            {
-                var val = innerList[innerList.Count - 1];
-                return val;
-            }
-
-            public object GetValue(int index)
-            {
-                return innerList[index];
-            }
-
-            public void SetValue(int index, object val)
-            {
-                innerList[index] = val;
-            }
-
-            public void Clear()
-            {
-                innerList.Clear();
-            }
-
-            public IEnumerator GetEnumerator()
-            {
-                return innerList.GetEnumerator();
-            }
-
-
-            private System.Text.StringBuilder sb = new StringBuilder();
-            public override string ToString()
-            {
-                sb.Length = 0;
-                sb.AppendFormat("Stack({0}): ", innerList.Count);
-                foreach (var obj in innerList)
-                {
-                    sb.Append(obj != null ? obj.ToString() : "null");
-                    sb.Append(";");
-                }
-                return sb.ToString();
-            }
-        }
-
+        private MethodDefinition methodDef;
         private const int kArgSize = 32;
         private object[] arguments = null;
 
         private VMStack machineStack = new VMStack();
         private object[] machineVar = new object[kArgSize];
         private Type[] machineVarType = new Type[kArgSize];
-
-        private VMAddrPool addrPool = new VMAddrPool();
 
         private Dictionary<int, int> offset2idx = new Dictionary<int, int>();
 
@@ -280,13 +147,13 @@ namespace ILVM
         /// execute method ils, note that args[0] must be the obj own this method
         /// </summary>
         /// <returns></returns>
-        public object Execute(MethodDefinition methodDef, object[] args)
+        public object Execute(MethodDefinition mtd, object[] args)
         {
-            var ilLst = methodDef.Body.Instructions;
+            var ilLst = mtd.Body.Instructions;
 
             // Print all IL
             var sb = new System.Text.StringBuilder();
-            sb.AppendFormat("============================ execute new: {0} \t{1}", args != null ? args[0].GetType().ToString() : "null", ilLst.Count);
+            sb.AppendFormat("============================ execute new: {0}.{1} \t{2}", args != null ? args[0].GetType().ToString() : "null", mtd, ilLst.Count);
             sb.AppendLine();
             foreach (var il in ilLst)
             {
@@ -295,10 +162,10 @@ namespace ILVM
             }
             Logger.Log(sb.ToString());
 
+            methodDef = mtd;
             arguments = args;
             machineStack.Clear();
-            addrPool.ClearAllAddrHandle();
-            InitLocalVar(methodDef);
+            InitLocalVar(mtd);
 
             // save offset
             offset2idx.Clear();
@@ -336,7 +203,6 @@ namespace ILVM
             arguments = null;
             machineStack.Clear();
             offset2idx.Clear();
-            addrPool.ClearAllAddrHandle();
             return ret;
         }
 
@@ -508,6 +374,9 @@ namespace ILVM
                 case Code.Ldarg_S:
                 case Code.Ldarg:
                     return ExecuteLoadArg((int)il.Operand);
+                case Code.Ldarga:
+                case Code.Ldarga_S:
+                    return ExecuteLoadArgAddr(il.Operand as ParameterDefinition);
 
                 //case Code.Ldflda:
                 case Code.Ldfld:
@@ -519,6 +388,28 @@ namespace ILVM
                     return ExecuteStfld(il.Operand as FieldDefinition);
                 case Code.Stsfld:
                     return ExecuteStsfld(il.Operand as FieldDefinition);
+
+                case Code.Ldind_I:
+                case Code.Ldind_I1:
+                case Code.Ldind_I2:
+                case Code.Ldind_I4:
+                case Code.Ldind_I8:
+                case Code.Ldind_R4:
+                case Code.Ldind_R8:
+                case Code.Ldind_U1:
+                case Code.Ldind_U2:
+                case Code.Ldind_U4:
+                case Code.Ldind_Ref:
+                    return ExecuteLdind();
+                case Code.Stind_I:
+                case Code.Stind_I1:
+                case Code.Stind_I2:
+                case Code.Stind_I4:
+                case Code.Stind_I8:
+                case Code.Stind_R4:
+                case Code.Stind_R8:
+                case Code.Stind_Ref: 
+                    return ExecuteStind();
 
                 case Code.Add:
                 case Code.Add_Ovf:
@@ -674,9 +565,6 @@ namespace ILVM
 
         private bool ExecuteUnbox(TypeReference typeRef)
         {
-            //var val = machineStack.Pop();
-            //var addrHandle = addrPool.GetVmStackAddrHandle(this, val);
-            //machineStack.Push(addrHandle);
             return true;
         }
 
@@ -723,66 +611,16 @@ namespace ILVM
         {
             var typeDef = il.Operand as TypeDefinition;
             var typeInfo = GetTypeByName(typeDef.FullName);
-            var addrHandle = machineStack.Pop() as VMAddrPool.AddressHandle;
-            var obj = addrHandle.GetObj();
+            var addr = machineStack.Pop() as VMAddr;
+            var obj = addr.GetObj();
             if (typeInfo.IsValueType)
                 obj = Activator.CreateInstance(typeInfo);
             else
                 obj = null;
-            addrHandle.SetObj(obj);
+            addr.SetObj(obj);
             machineStack.Push(obj);
             return true;
         }
-
-        //private object InitObjInner(object inst, Type typeInfo)
-        //{
-        //    foreach (var field in typeInfo.GetFields())
-        //    {
-        //        var fieldType = field.FieldType;
-        //        if (fieldType.IsPrimitive)
-        //        {
-        //            if (fieldType == typeof(Boolean))
-        //                field.SetValue(inst, default(Boolean));
-        //            else if (fieldType == typeof(Byte))
-        //                field.SetValue(inst, default(Byte));
-        //            else if (fieldType == typeof(SByte))
-        //                field.SetValue(inst, default(SByte));
-        //            else if (fieldType == typeof(Int16))
-        //                field.SetValue(inst, default(Int16));
-        //            else if (fieldType == typeof(UInt16))
-        //                field.SetValue(inst, default(UInt16));
-        //            else if (fieldType == typeof(Int32))
-        //                field.SetValue(inst, default(Int32));
-        //            else if (fieldType == typeof(UInt32))
-        //                field.SetValue(inst, default(UInt32));
-        //            else if (fieldType == typeof(Int64))
-        //                field.SetValue(inst, default(Int64));
-        //            else if (fieldType == typeof(UInt64))
-        //                field.SetValue(inst, default(UInt64));
-        //            else if (fieldType == typeof(IntPtr))
-        //                field.SetValue(inst, default(IntPtr));
-        //            else if (fieldType == typeof(UIntPtr))
-        //                field.SetValue(inst, default(UIntPtr));
-        //            else if (fieldType == typeof(Char))
-        //                field.SetValue(inst, default(Char));
-        //            else if (fieldType == typeof(Single))
-        //                field.SetValue(inst, default(Single));
-        //            else if (fieldType == typeof(Double))
-        //                field.SetValue(inst, default(Double));
-        //            continue;
-        //        }
-
-        //        if (!fieldType.IsValueType)
-        //        {
-        //            field.SetValue(inst, null);
-        //            continue;
-        //        }
-
-        //        var fieldObj = field.GetValue(inst);
-        //        field.SetValue(inst, InitObjInner(fieldObj, fieldType));
-        //    }
-        //    return inst;
-        //}
 
         private bool ExecuteIsinst(Instruction il)
         {
@@ -808,8 +646,9 @@ namespace ILVM
         {
             var idx = (int)machineStack.Pop();
             var arr = machineStack.Pop() as Array;
-            var addrHandle = addrPool.GetArrayElemAddrHandle(this, arr, idx);
-            machineStack.Push(addrHandle);
+            var addr = VMAddr.Create(arr.GetValue(idx));
+            arr.SetValue(addr, idx);
+            machineStack.Push(addr);
             return true;
         }
 
@@ -875,8 +714,9 @@ namespace ILVM
 
         private bool ExecuteLoadLocalAddr(int index)
         {
-            var addrHandle = addrPool.GetVmVarAddrHandle(this, index);
-            machineStack.Push(addrHandle);
+            var addr = VMAddr.Create(machineVar[index]);
+            machineVar[index] = addr;
+            machineStack.Push(addr);
             return true;
         }
 
@@ -886,6 +726,27 @@ namespace ILVM
                 machineStack.Push(null);
             else
                 machineStack.Push(arguments[index]);
+            return true;
+        }
+
+        private bool ExecuteLoadArgAddr(ParameterDefinition paramDef)
+        {
+            var idx = -1;
+            for (var i = 0; i != this.methodDef.Parameters.Count; ++i)
+            {
+                if (this.methodDef.Parameters[i] == paramDef)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0)
+                return false;
+
+            var addr = VMAddr.Create(arguments[idx + 1]);
+            arguments[idx + 1] = addr;
+            machineStack.Push(addr);
+
             return true;
         }
 
@@ -914,16 +775,16 @@ namespace ILVM
             var obj = machineStack.Pop();
 
             // may ref by pointer
-            var addrHandle = obj as VMAddrPool.AddressHandle;
-            if (addrHandle != null)
-                obj = addrHandle.GetObj();
+            var addr = obj as VMAddr;
+            if (addr != null)
+                obj = addr.GetObj();
 
             var typeInfo = obj.GetType();
             var fieldInfo = typeInfo.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
             fieldInfo.SetValue(obj, val);
 
-            if (addrHandle != null)
-                addrHandle.SetObj(obj);
+            if (addr != null)
+                addr.SetObj(obj);
 
             return true;
         }
@@ -934,6 +795,25 @@ namespace ILVM
             var fieldInfo = classType.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
             var val = machineStack.Pop();
             fieldInfo.SetValue(null, val);
+            return true;
+        }
+
+        private bool ExecuteLdind()
+        {
+            var addr = machineStack.Pop() as VMAddr;
+            Assert.IsNotNull(addr);
+            var val = addr.GetObj();
+            machineStack.Push(val);
+            addr.Dispose();
+            return false;
+        }
+
+        private bool ExecuteStind()
+        {
+            var val = machineStack.Pop();
+            var addr = machineStack.Pop() as VMAddr;
+            Assert.IsNotNull(addr);
+            addr.SetObj(val);
             return true;
         }
 
@@ -1683,10 +1563,29 @@ namespace ILVM
             paramLst[0] = instance;
             for (var i = 1; i != paramCnt; ++i)
             {
-                paramLst[i] = parameters[i - 1];
+                var paramVal = parameters[i - 1];
+                var paramDef = methodDef.Parameters[i - 1];
+                if (paramDef.ParameterType.IsByReference)
+                {
+                    var paramAddr = VMAddr.Create(paramVal);
+                    paramVal = paramAddr;
+                }
+                paramLst[i] = paramVal;
             }
+
             var innerVm = new ILVirtualMachine();
-            return innerVm.Execute(methodDef, paramLst);
+            var ret = innerVm.Execute(methodDef, paramLst);
+
+            // handle 'Ref' parameters
+            for (var i = 1; i != paramCnt; ++i)
+            {
+                var paramVal = parameters[i - 1];
+                var paramAddr = paramVal as VMAddr;
+                if (paramAddr == null)
+                    continue;
+                paramAddr.SetObj(paramLst[i]);
+            }
+            return ret;
         }
 
         private bool ExecuteCall(Instruction il, bool virtualCall = false)
@@ -1699,22 +1598,19 @@ namespace ILVM
                 return ExecuteCallProp(il);
 
             object[] parameters = null;
-            VMAddrPool.AddressHandle[] paramAddrHandles = null;
+            VMAddr[] paramAddrs = null;
             if (methodRef.HasParameters)
             {
                 parameters = new object[methodRef.Parameters.Count];
-                paramAddrHandles = new VMAddrPool.AddressHandle[methodRef.Parameters.Count];
+                paramAddrs = new VMAddr[methodRef.Parameters.Count];
                 for (var i = 0; i != methodRef.Parameters.Count; ++i)
                 {
-                    // cannot know type right now, may runtime bound
-                    //var paramType = GetTypeByName(methodRef.Parameters[i].ParameterType.FullName);
-                    //var paramVal = Convert.ChangeType(machineStack.Pop(), paramType);
                     var paramVal = machineStack.Pop();
-                    if (paramVal is VMAddrPool.AddressHandle)
+                    if (paramVal is VMAddr)
                     {
-                        var paramAddrHandle = paramVal as VMAddrPool.AddressHandle;
-                        paramAddrHandles[i] = paramAddrHandle;
-                        paramVal = paramAddrHandle.GetObj();
+                        var addr = paramVal as VMAddr;
+                        paramAddrs[i] = addr;
+                        paramVal = addr.GetObj();
                     }
                     parameters[methodRef.Parameters.Count - i - 1] = paramVal;
                 }
@@ -1728,13 +1624,13 @@ namespace ILVM
             }
 
             object instance = null;
-            VMAddrPool.AddressHandle instAddrHandle = null;
+            VMAddr instAddr = null;
             if (!methodInfo.IsStatic)
                 instance = machineStack.Pop();
-            if (instance is VMAddrPool.AddressHandle)
+            if (instance is VMAddr)
             {
-                instAddrHandle = instance as VMAddrPool.AddressHandle;
-                instance = instAddrHandle.GetObj();
+                instAddr = instance as VMAddr;
+                instance = instAddr.GetObj();
             }
 
             object result;
@@ -1765,16 +1661,16 @@ namespace ILVM
                 machineStack.Push(result);
 
             // addr handles
-            if (instAddrHandle != null)
-                instAddrHandle.SetObj(instance);
-            if (paramAddrHandles != null)
+            if (instAddr != null)
+                instAddr.SetObj(instance);
+            if (paramAddrs != null)
             {
-                for (var i = 0; i != paramAddrHandles.Length; ++i)
+                for (var i = 0; i != paramAddrs.Length; ++i)
                 {
-                    var paramAddrHandle = paramAddrHandles[i];
-                    if (paramAddrHandle == null)
+                    var paramAddr = paramAddrs[i];
+                    if (paramAddr == null)
                         continue;
-                    paramAddrHandle.SetObj(parameters[i]);
+                    paramAddr.SetObj(parameters[i]);
                 }
             }
 
@@ -1805,33 +1701,33 @@ namespace ILVM
             }
 
             object[] propIdx = null;
-            VMAddrPool.AddressHandle[] propAddrHandles = null;
+            VMAddr[] propAddrs = null;
             var idxParams = propInfo.GetIndexParameters();
             if (idxParams.Length > 0)
             {
                 propIdx = new object[idxParams.Length];
-                propAddrHandles = new VMAddrPool.AddressHandle[idxParams.Length];
+                propAddrs = new VMAddr[idxParams.Length];
                 for (var i = 0; i != idxParams.Length; ++i)
                 {
                     var idxVal = machineStack.Pop();
-                    if (idxVal is VMAddrPool.AddressHandle)
+                    if (idxVal is VMAddr)
                     {
-                        var paramAddrHandle = idxVal as VMAddrPool.AddressHandle;
-                        propAddrHandles[i] = paramAddrHandle;
-                        idxVal = paramAddrHandle.GetObj();
+                        var propAddr = idxVal as VMAddr;
+                        propAddrs[i] = propAddr;
+                        idxVal = propAddr.GetObj();
                     }
                     propIdx[i] = idxVal;
                 }
             }
 
             object instance = null;
-            VMAddrPool.AddressHandle instAddrHandle = null;
+            VMAddr instAddr = null;
             if (!methodDef.IsStatic)
                 instance = machineStack.Pop();
-            if (instance is VMAddrPool.AddressHandle)
+            if (instance is VMAddr)
             {
-                instAddrHandle = instance as VMAddrPool.AddressHandle;
-                instance = instAddrHandle.GetObj();
+                instAddr = instance as VMAddr;
+                instance = instAddr.GetObj();
             }
 
             if (isSet)
@@ -1845,23 +1741,22 @@ namespace ILVM
             }
 
             // addr handles
-            if (instAddrHandle != null)
-                instAddrHandle.SetObj(instance);
-            if (propAddrHandles != null)
+            if (instAddr != null)
+                instAddr.SetObj(instance);
+            if (propAddrs != null)
             {
-                for (var i = 0; i != propAddrHandles.Length; ++i)
+                for (var i = 0; i != propAddrs.Length; ++i)
                 {
-                    var paramAddrHandle = propAddrHandles[i];
-                    if (paramAddrHandle == null)
+                    var propAddr = propAddrs[i];
+                    if (propAddr == null)
                         continue;
-                    paramAddrHandle.SetObj(propIdx[i]);
+                    propAddr.SetObj(propIdx[i]);
                 }
             }
 
             return true;
         }
 
-        private FieldInfo typeRefArgumentsField = null;
 
         private Type GetTypeInfoFromTypeReference(TypeReference typeRef)
         {

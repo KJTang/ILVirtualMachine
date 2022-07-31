@@ -31,7 +31,8 @@ namespace ILVM
                 }
                 ILVmManager.LoadMethodIdFromFile(assemblyHandle);
                 ILVmManager.ClearMethodInfo();
-            
+                ILVM.VMAddr.Clear();
+
                 var timer = new DebugTimer();
                 timer.Start("Print MethodId");
                 ILVmManager.DumpAllMethodId();
@@ -92,6 +93,7 @@ namespace ILVM
         public static void ClearHotfix()
         {
             ILVmManager.ClearMethodInfo();
+            ILVM.VMAddr.Clear();
             if (currentAssembly != null)
                 currentAssembly.Dispose();
             currentAssembly = null;

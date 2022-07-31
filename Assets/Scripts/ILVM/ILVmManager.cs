@@ -211,8 +211,23 @@ namespace ILVM
             
             var intType = typeof(System.Int32);
             tr_SystemInt = assemblyDef.MainModule.ImportReference(intType);
+
+            var objArrType = typeof(Array);
+            tr_SystemObjectArr = assemblyDef.MainModule.ImportReference(objArrType);
+
+            var vmAddrType = assemblyDef.MainModule.GetType("ILVM.VMAddr");
+            tr_VMAddr = assemblyDef.MainModule.ImportReference(vmAddrType);
+
+            var vmAddrCtorType = tr_VMAddr.Resolve().Methods.First(mtd => mtd.IsConstructor && mtd.Parameters.Count > 0);
+            mr_VMAddrCtor = assemblyDef.MainModule.ImportReference(vmAddrCtorType);
+
+            var vmAddrGetObjType = tr_VMAddr.Resolve().Methods.First(mtd => mtd.Name == "GetObj");
+            mr_VMAddrGetObj = assemblyDef.MainModule.ImportReference(vmAddrGetObjType);
+
+            var vmAddrSetObjType = tr_VMAddr.Resolve().Methods.First(mtd => mtd.Name == "SetObj");
+            mr_VMAddrSetObj = assemblyDef.MainModule.ImportReference(vmAddrSetObjType);
         }
-        
+
         private void ClearReference()
         {
             mr_HasMethodInfo = null;
@@ -221,6 +236,11 @@ namespace ILVM
 
             tr_SystemObject = null;
             tr_SystemInt = null;
+            tr_SystemObjectArr = null;
+            tr_VMAddr = null;
+            mr_VMAddrCtor = null;
+            mr_VMAddrGetObj = null;
+            mr_VMAddrSetObj = null;
         }
 
         public MethodReference MR_HasMethodInfo
@@ -252,6 +272,36 @@ namespace ILVM
             get { return tr_SystemInt; }
         }
         private TypeReference tr_SystemInt;
+
+        public TypeReference TR_SystemObjectArr
+        {
+            get { return tr_SystemObjectArr; }
+        }
+        private TypeReference tr_SystemObjectArr;
+
+        public TypeReference TR_VMAddr
+        {
+            get { return tr_VMAddr; }
+        }
+        private TypeReference tr_VMAddr;
+
+        public MethodReference MR_VMAddrCtor
+        {
+            get { return mr_VMAddrCtor; }
+        }
+        private MethodReference mr_VMAddrCtor;
+
+        public MethodReference MR_VMAddrGetObj
+        {
+            get { return mr_VMAddrGetObj; }
+        }
+        private MethodReference mr_VMAddrGetObj;
+
+        public MethodReference MR_VMAddrSetObj
+        {
+            get { return mr_VMAddrSetObj; }
+        }
+        private MethodReference mr_VMAddrSetObj;
     }
 
 

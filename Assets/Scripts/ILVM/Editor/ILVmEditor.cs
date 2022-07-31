@@ -96,10 +96,10 @@ namespace ILVM
                     }
                 }
 
-                try
+                var vm = new ILVirtualMachine();
+                foreach (var method in methodToTest)
                 {
-                    var vm = new ILVirtualMachine();
-                    foreach (var method in methodToTest)
+                    try
                     {
                         var rfClsInst = Activator.CreateInstance(method.DeclaringType);
                         var rfRet = method.Invoke(rfClsInst, null);
@@ -112,10 +112,10 @@ namespace ILVM
                         var vmRet = vm.Execute(methodTypeDef, parameters);
                         Logger.Error("#ILVM_Test# {0} \treflection ret: {1} \tvm ret: {2} \tsucc: {3}", method.DeclaringType, rfRet, vmRet, (string)rfRet == (string)vmRet ? "<color=green>succ</color>" :  "<color=red>failed</color>");
                     }
-                }
-                catch (Exception e)
-                {
-                    Logger.Error("ILVmEditor: exception: {0}", e);
+                    catch (Exception e)
+                    {
+                        Logger.Error("ILVmEditor: exception: {0} \n{1}", method.DeclaringType, e);
+                    }
                 }
             }
         }
