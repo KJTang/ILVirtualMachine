@@ -107,7 +107,7 @@ namespace ILVM
                         var classTypeDef = assembly.MainModule.GetType(method.DeclaringType.FullName);
                         var methodTypeDef = classTypeDef.Methods.First(m => m.Name == "Func");
 
-                        var vmClsInst = Activator.CreateInstance(method.DeclaringType);
+                         var vmClsInst = Activator.CreateInstance(method.DeclaringType);
                         var parameters = new object[] { vmClsInst };
                         var vmRet = vm.Execute(methodTypeDef, parameters);
                         Logger.Error("#ILVM_Test# {0} \treflection ret: {1} \tvm ret: {2} \tsucc: {3}", method.DeclaringType, rfRet, vmRet, (string)rfRet == (string)vmRet ? "<color=green>succ</color>" :  "<color=red>failed</color>");
@@ -118,6 +118,13 @@ namespace ILVM
                     }
                 }
             }
+        }
+        
+        [MenuItem("ILVirtualMachine/Enable Log", false, 42)]
+        public static void EnableLog()
+        {
+            Logger.EnableLog = !Logger.EnableLog;
+            UnityEngine.Debug.LogErrorFormat("#ILVM# EnableLog: {0}", Logger.EnableLog);
         }
     }
 

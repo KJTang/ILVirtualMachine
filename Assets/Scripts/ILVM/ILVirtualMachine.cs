@@ -1739,7 +1739,7 @@ namespace ILVM
                     var paramAddr = paramAddrs[i];
                     if (paramAddr == null)
                         continue;
-                    paramAddr.SetObj(parameters[i]);
+                    paramAddr.SetObj(parameters[paramAddrs.Length - i - 1]);
                 }
             }
 
@@ -1819,7 +1819,7 @@ namespace ILVM
                     var propAddr = propAddrs[i];
                     if (propAddr == null)
                         continue;
-                    propAddr.SetObj(propIdx[i]);
+                    propAddr.SetObj(propIdx[propAddrs.Length - i - 1]);
                 }
             }
 
@@ -1859,6 +1859,7 @@ namespace ILVM
                 return null;
 
             var allMethods = classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            var allMatched = new List<MethodInfo>();
             foreach (var method in allMethods)
             {
                 if (method.Name != methodDef.Name)
@@ -1867,22 +1868,45 @@ namespace ILVM
                 if (method.GetParameters().Length != methodDef.Parameters.Count)
                     continue;
 
-                var match = true;
+                var matched = true;
                 for (var i = 0; i != method.GetParameters().Length; ++i)
                 {
                     var paramInfo = method.GetParameters()[i];
+                    var paramDef = GetTypeInfoFromTypeReference(methodDef.Parameters[i].ParameterType);
                     var paramObj = parameters[i];
-                    if (!IsParameterMatch(paramInfo.ParameterType, paramObj.GetType()))
+                    if (!IsParameterMatch(paramInfo.ParameterType, paramDef, paramObj?.GetType()))
                     {
-                        match = false;
+                        matched = false;
                         break;
                     }
                 }
-                if (match)
+                if (matched)
+                    allMatched.Add(method);
+            }
+
+            if (allMatched.Count == 1)
+            {
+                methodInfo = allMatched[0];
+            }
+            else if (allMatched.Count > 1)
+            {
+                allMatched.Sort((a, b) =>
                 {
-                    methodInfo = method;
-                    break;
-                }
+                    var paramCnt = a.GetParameters().Length;
+                    for (var i = 0; i != paramCnt; ++i)
+                    {
+                        var aParam = a.GetParameters()[i];
+                        var bParam = b.GetParameters()[i];
+                        if (aParam.ParameterType == bParam.ParameterType)
+                            continue;
+
+                        if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
+                            return 1;
+                        return -1;
+                    }
+                    return 0;
+                });
+                methodInfo = allMatched[0];
             }
 
             return methodInfo;
@@ -1901,42 +1925,72 @@ namespace ILVM
                 return null;
             
             var allConstructors = classInfo.GetConstructors();
+            var allMatched = new List<ConstructorInfo>();
             foreach (var constructor in allConstructors)
             {
                 if (constructor.GetParameters().Length != methodDef.Parameters.Count)
                     continue;
 
-                var match = true;
+                var matched = true;
                 for (var i = 0; i != constructor.GetParameters().Length; ++i)
                 {
                     var paramInfo = constructor.GetParameters()[i];
+                    var paramDef = GetTypeInfoFromTypeReference(methodRef.Parameters[i].ParameterType);
                     var paramObj = parameters[i];
-                    if (!IsParameterMatch(paramInfo.ParameterType, paramObj.GetType()))
+                    if (!IsParameterMatch(paramInfo.ParameterType, paramDef, paramObj?.GetType()))
                     {
-                        match = false;
+                        matched = false;
                         break;
                     }
                 }
-                if (match)
-                {
-                    constructorInfo = constructor;
-                    break;
-                }
+                if (matched)
+                    allMatched.Add(constructor);
             }
+            
+            if (allMatched.Count == 1)
+            {
+                constructorInfo = allMatched[0];
+            }
+            else if (allMatched.Count > 1)
+            {
+                allMatched.Sort((a, b) =>
+                {
+                    var paramCnt = a.GetParameters().Length;
+                    for (var i = 0; i != paramCnt; ++i)
+                    {
+                        var aParam = a.GetParameters()[i];
+                        var bParam = b.GetParameters()[i];
+                        if (aParam.ParameterType == bParam.ParameterType)
+                            continue;
+
+                        if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
+                            return 1;
+                        return -1;
+                    }
+                    return 0;
+                });
+                constructorInfo = allMatched[0];
+            }
+
             return constructorInfo;
         }
 
 
-        private bool IsParameterMatch(Type needType, Type checkType)
+        private bool IsParameterMatch(Type needType, Type defType, Type objType)
         {
             if (!needType.IsGenericParameter)
-                return needType.IsAssignableFrom(checkType);
+            {
+                return needType.IsAssignableFrom(defType);
+            }
+
+            if (objType == null)
+                return !needType.IsValueType;
 
             // exp. "where T : BaseClassA, BaseClassB"
             var baseTypeConstraints = needType.GetGenericParameterConstraints();
             foreach (var baseType in baseTypeConstraints)
             {
-                if (!baseType.IsAssignableFrom(checkType))
+                if (!baseType.IsAssignableFrom(objType))
                     return false;
             }
 
@@ -1949,18 +2003,18 @@ namespace ILVM
 
             if ((specialConstraints & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
             {
-                if (checkType.IsValueType)
+                if (objType.IsValueType)
                     return false;
             }
             if ((specialConstraints & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0)
             {
-                if (Nullable.GetUnderlyingType(checkType) != null)
+                if (Nullable.GetUnderlyingType(objType) != null)
                     return false;
             }
 
             if ((specialConstraints & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
             {
-                var constructors = checkType.GetConstructors();
+                var constructors = objType.GetConstructors();
                 var found = false;
                 foreach (var c in constructors)
                 {
