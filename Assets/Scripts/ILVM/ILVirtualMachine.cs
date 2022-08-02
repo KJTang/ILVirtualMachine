@@ -530,6 +530,8 @@ namespace ILVM
                 case Code.Clt_Un:
                     return ExecuteClt();
 
+                case Code.Constrained: 
+                    return ExecuteConstrained(il.Operand as TypeDefinition);
                 case Code.Call:
                     return ExecuteCall(il);
                 case Code.Callvirt:
@@ -754,7 +756,17 @@ namespace ILVM
         {
             var obj = machineStack.Pop();
             var typeInfo = obj.GetType();
-            var fieldInfo = typeInfo.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+            FieldInfo fieldInfo = null;
+            while (typeInfo != null)
+            {
+                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
+                if (fieldInfo != null)
+                    break;
+                typeInfo = typeInfo.BaseType;
+            }
+            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, obj.GetType()));
+
             var val = fieldInfo.GetValue(obj);
             machineStack.Push(val);
             return true;
@@ -762,8 +774,18 @@ namespace ILVM
 
         private bool ExecuteLdsfld(FieldDefinition fieldDef)
         {
-            var classType = GetTypeByName(fieldDef.DeclaringType.FullName);
-            var fieldInfo = classType.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+            var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
+            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+            FieldInfo fieldInfo = null;
+            while (typeInfo != null)
+            {
+                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
+                if (fieldInfo != null)
+                    break;
+                typeInfo = typeInfo.BaseType;
+            }
+            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, fieldDef.DeclaringType.FullName));
+
             var val = fieldInfo.GetValue(null);
             machineStack.Push(val);
             return true;
@@ -781,6 +803,10 @@ namespace ILVM
 
             var typeInfo = obj.GetType();
             var fieldInfo = typeInfo.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+
+            // special handle for boolean
+            if (fieldInfo.FieldType == typeof(System.Boolean) && val.GetType() == typeof(System.Int32))
+                val = (System.Int32)val == 1;
             fieldInfo.SetValue(obj, val);
 
             if (addr != null)
@@ -794,6 +820,10 @@ namespace ILVM
             var classType = GetTypeByName(fieldDef.DeclaringType.FullName);
             var fieldInfo = classType.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
             var val = machineStack.Pop();
+            fieldInfo.SetValue(null, val);
+            // special handle for boolean
+            if (fieldInfo.FieldType == typeof(System.Boolean) && val.GetType() == typeof(System.Int32))
+                val = (System.Int32)val == 1;
             fieldInfo.SetValue(null, val);
             return true;
         }
@@ -1383,7 +1413,7 @@ namespace ILVM
 
             return true;
         }
-
+        
         private bool ExecuteBrtrue(int offset)
         {
             var val = machineStack.Pop();
@@ -1401,6 +1431,22 @@ namespace ILVM
             {
                 if ((Double)val != 0)
                     return ExecuteBr(offset);
+            }
+            else if (val is Enum)
+            {
+                var intVal = (int)val;
+                if (intVal != 0)
+                    return ExecuteBr(offset);
+            }
+            else if (!val.GetType().IsValueType)
+            {
+                if (val != null)
+                    return ExecuteBr(offset);
+            }
+            else
+            { 
+                Logger.Error("ILRunner: brtrue: invalid type: {0}", val.GetType());
+                return false;
             }
             return true;
         }
@@ -1422,6 +1468,22 @@ namespace ILVM
             {
                 if ((Double)val == 0)
                     return ExecuteBr(offset);
+            }
+            else if (val is Enum)
+            { 
+                var intVal = (int)val;
+                if (intVal == 0)
+                    return ExecuteBr(offset);
+            }
+            else if (!val.GetType().IsValueType)
+            {
+                if (val == null)
+                    return ExecuteBr(offset);
+            }
+            else
+            {
+                Logger.Error("ILRunner: brfalse: invalid type: {0}", val.GetType());
+                return false;
             }
             return true;
         }
@@ -1542,6 +1604,13 @@ namespace ILVM
             machineStack.Push(result ? 1 : 0);
             return true;
         }
+
+        private bool ExecuteConstrained(TypeDefinition typeDef)
+        { 
+            // currently do nothing.
+            return true;
+        }
+
 
         private object InternalCall(Instruction il, MethodInfo methodInfo, object instance, object[] parameters, bool virtualCall)
         {

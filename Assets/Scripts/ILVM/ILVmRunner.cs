@@ -19,7 +19,7 @@ namespace ILVM
             if (currentAssembly != null)
                 currentAssembly.Dispose();
             currentAssembly = null;
-
+            
             var debugPath = Application.dataPath.Replace("/Assets", "/Library/ILVM/Assembly-CSharp.dll");
             var assemblyHandle = new AssemblyHandle(debugPath);
             try
@@ -27,6 +27,8 @@ namespace ILVM
                 if (assemblyHandle.IsInjected())
                 {
                     Logger.Error("ILVmRunner: cannot hotfix injected assembly!");
+                    assemblyHandle.Dispose();
+                    assemblyHandle = null;
                     return;
                 }
                 ILVmManager.LoadMethodIdFromFile(assemblyHandle);
@@ -57,6 +59,8 @@ namespace ILVM
                 if (methodNeedFix.Count <= 0)
                 {
                     Logger.Error("ILVmRunner: no method need fix");
+                    assemblyHandle.Dispose();
+                    assemblyHandle = null;
                     return;
                 }
 
