@@ -1894,16 +1894,28 @@ namespace ILVM
             if (methodDef.IsConstructor)
                 return null;
 
-            var allMethods = classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            var allMethods = new List<MethodInfo>(classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static));
             var allMatched = new List<MethodInfo>();
+
+            // check name & param cnt first
             foreach (var method in allMethods)
             {
                 if (method.Name != methodDef.Name)
                     continue;
-
                 if (method.GetParameters().Length != methodDef.Parameters.Count)
                     continue;
+                allMatched.Add(method);
+            }
+            if (allMatched.Count == 0)
+                return null;
+            if (allMatched.Count == 1)
+                return allMatched[0];
 
+            // check param type then
+            allMethods = allMatched;
+            allMatched = new List<MethodInfo>();
+            foreach (var method in allMethods)
+            {
                 var matched = true;
                 for (var i = 0; i != method.GetParameters().Length; ++i)
                 {
@@ -1919,32 +1931,28 @@ namespace ILVM
                 if (matched)
                     allMatched.Add(method);
             }
-
+            if (allMatched.Count == 0)
+                return null;
             if (allMatched.Count == 1)
+                return allMatched[0];
+
+            allMatched.Sort((a, b) =>
             {
-                methodInfo = allMatched[0];
-            }
-            else if (allMatched.Count > 1)
-            {
-                allMatched.Sort((a, b) =>
+                var paramCnt = a.GetParameters().Length;
+                for (var i = 0; i != paramCnt; ++i)
                 {
-                    var paramCnt = a.GetParameters().Length;
-                    for (var i = 0; i != paramCnt; ++i)
-                    {
-                        var aParam = a.GetParameters()[i];
-                        var bParam = b.GetParameters()[i];
-                        if (aParam.ParameterType == bParam.ParameterType)
-                            continue;
+                    var aParam = a.GetParameters()[i];
+                    var bParam = b.GetParameters()[i];
+                    if (aParam.ParameterType == bParam.ParameterType)
+                        continue;
 
-                        if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
-                            return 1;
-                        return -1;
-                    }
-                    return 0;
-                });
-                methodInfo = allMatched[0];
-            }
-
+                    if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
+                        return 1;
+                    return -1;
+                }
+                return 0;
+            });
+            methodInfo = allMatched[0];
             return methodInfo;
         }
 
@@ -1960,8 +1968,22 @@ namespace ILVM
             if (!methodDef.IsConstructor)
                 return null;
             
-            var allConstructors = classInfo.GetConstructors();
+            var allConstructors = new List<ConstructorInfo>(classInfo.GetConstructors());
             var allMatched = new List<ConstructorInfo>();
+
+            // check name & param cnt first
+            foreach (var constructor in allConstructors)
+            {
+                if (constructor.GetParameters().Length != methodDef.Parameters.Count)
+                    continue;
+                allMatched.Add(constructor);
+            }
+            if (allMatched.Count == 0)
+                return null;
+            if (allMatched.Count == 1)
+                return allMatched[0];
+
+            // check param type then
             foreach (var constructor in allConstructors)
             {
                 if (constructor.GetParameters().Length != methodDef.Parameters.Count)
@@ -1982,39 +2004,51 @@ namespace ILVM
                 if (matched)
                     allMatched.Add(constructor);
             }
-            
+            if (allMatched.Count == 0)
+                return null;
             if (allMatched.Count == 1)
+                return allMatched[0];
+            
+            allMatched.Sort((a, b) =>
             {
-                constructorInfo = allMatched[0];
-            }
-            else if (allMatched.Count > 1)
-            {
-                allMatched.Sort((a, b) =>
+                var paramCnt = a.GetParameters().Length;
+                for (var i = 0; i != paramCnt; ++i)
                 {
-                    var paramCnt = a.GetParameters().Length;
-                    for (var i = 0; i != paramCnt; ++i)
-                    {
-                        var aParam = a.GetParameters()[i];
-                        var bParam = b.GetParameters()[i];
-                        if (aParam.ParameterType == bParam.ParameterType)
-                            continue;
+                    var aParam = a.GetParameters()[i];
+                    var bParam = b.GetParameters()[i];
+                    if (aParam.ParameterType == bParam.ParameterType)
+                        continue;
 
-                        if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
-                            return 1;
-                        return -1;
-                    }
-                    return 0;
-                });
-                constructorInfo = allMatched[0];
-            }
-
+                    if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
+                        return 1;
+                    return -1;
+                }
+                return 0;
+            });
+            constructorInfo = allMatched[0];
             return constructorInfo;
         }
 
 
         private bool IsParameterMatch(Type needType, Type objType, TypeReference typeRef)
         {
+            if (typeRef.IsGenericInstance)
+            {
+                var genericTypeRef = typeRef as GenericInstanceType;
+                for (var i = 0; i != genericTypeRef.GenericArguments.Count; ++i)
+                {
+                    var needTypeGenericParam = needType.GetGenericArguments()[i];
+                    var objTypeGenericParam = objType.GetGenericArguments()[i];
+                    var typeRefGenericParam = genericTypeRef.GenericArguments[i];
+                    if (!IsParameterMatch(needTypeGenericParam, objTypeGenericParam, typeRefGenericParam))
+                        return false;
+                }
+                return needType.IsAssignableFrom(objType);
+            }
+
             // 非 generic，先检查反射信息和 typeRef 是否匹配
+            if (typeRef is ByReferenceType)
+                typeRef = (typeRef as ByReferenceType).ElementType;
             if (!typeRef.IsGenericParameter)
             {
                 var defType = GetTypeInfoFromTypeReference(typeRef);

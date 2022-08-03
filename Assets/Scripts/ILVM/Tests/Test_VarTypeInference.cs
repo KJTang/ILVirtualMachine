@@ -21,11 +21,17 @@ namespace ILVMTest
                 if (kv.Key == 2)
                     result1 = kv.Value;
             }
+            if (result1 != "two")
+                return "invalid";
 
             var result2 = dict[2];
-
-            if (result1 != "two" || result2 != "two")
+            if (result2 != "two")
                 return "invalid";
+            
+            string result3;
+            if (!dict.TryGetValue(2, out result3) || result3 != "two")
+                return "invalid";
+
             return "hello";
         }
     }
