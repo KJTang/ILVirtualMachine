@@ -1614,6 +1614,39 @@ namespace ILVM
 
         private object InternalCall(Instruction il, MethodInfo methodInfo, object instance, object[] parameters, bool virtualCall)
         {
+            // parameters type cast
+            var paramInfoLst = methodInfo.GetParameters();
+            for (var i = 0; i != paramInfoLst.Length; ++i)
+            {
+                var paramInfo = paramInfoLst[i];
+                var paramObj = parameters[i];
+                if (!paramInfo.ParameterType.IsPrimitive || paramObj == null)
+                    continue;
+                if (paramInfo.ParameterType == typeof(Boolean))
+                    parameters[i] = (Boolean)Convert.ChangeType(paramObj, typeof(Boolean)); 
+                else if (paramInfo.ParameterType == typeof(SByte))
+                    parameters[i] = (SByte)Convert.ChangeType(paramObj, typeof(SByte)); 
+                else if (paramInfo.ParameterType == typeof(Byte))
+                    parameters[i] = (Byte)Convert.ChangeType(paramObj, typeof(Byte)); 
+                else if (paramInfo.ParameterType == typeof(Int16))
+                    parameters[i] = (Int16)Convert.ChangeType(paramObj, typeof(Int16)); 
+                else if (paramInfo.ParameterType == typeof(UInt16))
+                    parameters[i] = (UInt16)Convert.ChangeType(paramObj, typeof(UInt16)); 
+                else if (paramInfo.ParameterType == typeof(Int32))
+                    parameters[i] = (Int32)Convert.ChangeType(paramObj, typeof(Int32)); 
+                else if (paramInfo.ParameterType == typeof(UInt32))
+                    parameters[i] = (UInt32)Convert.ChangeType(paramObj, typeof(UInt32)); 
+                else if (paramInfo.ParameterType == typeof(Int64))
+                    parameters[i] = (Int64)Convert.ChangeType(paramObj, typeof(Int64)); 
+                else if (paramInfo.ParameterType == typeof(UInt64))
+                    parameters[i] = (UInt64)Convert.ChangeType(paramObj, typeof(UInt64)); 
+                else if (paramInfo.ParameterType == typeof(Single))
+                    parameters[i] = (Single)Convert.ChangeType(paramObj, typeof(Single)); 
+                else if (paramInfo.ParameterType == typeof(Double))
+                    parameters[i] = (Double)Convert.ChangeType(paramObj, typeof(Double)); 
+            }
+
+
             if (virtualCall)
                 return methodInfo.Invoke(instance, parameters);
 
@@ -1875,9 +1908,9 @@ namespace ILVM
                 for (var i = 0; i != method.GetParameters().Length; ++i)
                 {
                     var paramInfo = method.GetParameters()[i];
-                    var paramDef = GetTypeInfoFromTypeReference(methodDef.Parameters[i].ParameterType);
                     var paramObj = parameters[i];
-                    if (!IsParameterMatch(paramInfo.ParameterType, paramDef, paramObj?.GetType()))
+                    var paramRef = methodDef.Parameters[i].ParameterType;
+                    if (!IsParameterMatch(paramInfo.ParameterType, paramObj?.GetType(), paramRef))
                     {
                         matched = false;
                         break;
@@ -1938,9 +1971,9 @@ namespace ILVM
                 for (var i = 0; i != constructor.GetParameters().Length; ++i)
                 {
                     var paramInfo = constructor.GetParameters()[i];
-                    var paramDef = GetTypeInfoFromTypeReference(methodRef.Parameters[i].ParameterType);
                     var paramObj = parameters[i];
-                    if (!IsParameterMatch(paramInfo.ParameterType, paramDef, paramObj?.GetType()))
+                    var paramRef = methodRef.Parameters[i].ParameterType;
+                    if (!IsParameterMatch(paramInfo.ParameterType, paramObj?.GetType(), paramRef))
                     {
                         matched = false;
                         break;
@@ -1979,15 +2012,21 @@ namespace ILVM
         }
 
 
-        private bool IsParameterMatch(Type needType, Type defType, Type objType)
+        private bool IsParameterMatch(Type needType, Type objType, TypeReference typeRef)
         {
-            if (!needType.IsGenericParameter)
+            // 非 generic，先检查反射信息和 typeRef 是否匹配
+            if (!typeRef.IsGenericParameter)
             {
+                var defType = GetTypeInfoFromTypeReference(typeRef);
                 return needType.IsAssignableFrom(defType);
             }
 
+            // generic，检查反射信息和 objType 是否匹配
             if (objType == null)
                 return !needType.IsValueType;
+
+            if (!needType.IsGenericParameter)
+                return needType.IsAssignableFrom(objType);
 
             // exp. "where T : BaseClassA, BaseClassB"
             var baseTypeConstraints = needType.GetGenericParameterConstraints();
