@@ -1830,7 +1830,10 @@ namespace ILVM
         private Type GetTypeInfoFromTypeReference(TypeReference typeRef)
         {
             var typeDef = typeRef.Resolve();
-            var typeInfo = GetTypeByName(typeDef.FullName);
+            var typeName = typeDef.FullName;
+            if (typeRef.IsArray)
+                typeName = typeName + "[]";
+            var typeInfo = GetTypeByName(typeName);
             if (typeInfo == null || !typeInfo.IsGenericType)
                 return typeInfo;
 

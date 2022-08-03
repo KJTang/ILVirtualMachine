@@ -4,14 +4,14 @@ using UnityEngine;
 
 namespace ILVMTest {
 
-    public class Test_InvokeMethodWithOutParam
+    public class Test_InvokeMethodByReflection
     {
         public bool bValue = false;
 
         public string Func()
         {
             var b = true;
-            var fieldInfo = typeof(Test_InvokeMethodWithOutParam).GetField("bValue");
+            var fieldInfo = typeof(Test_InvokeMethodByReflection).GetField("bValue");
             fieldInfo.SetValue(this, b);
             if (bValue == false)
                 return "invalid";
@@ -23,7 +23,7 @@ namespace ILVMTest {
             args[0] = len;
             args[1] = lst;
 
-            var method = typeof(Test_InvokeMethodWithOutParam).GetMethod("Foo");
+            var method = typeof(Test_InvokeMethodByReflection).GetMethod("Foo");
             method.Invoke(this, args);
 
             if (len == (args[1] as List<object>).Count)
