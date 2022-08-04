@@ -159,6 +159,8 @@ namespace ILVM
             var lastIdx = vmPoolUsing.Count - 1;
             vmPoolUsing[idx] = vmPoolUsing[lastIdx];
             vmPoolUsing.RemoveAt(lastIdx);
+
+            vmPoolIdle.Add(vm);
         }
     }
 
@@ -243,6 +245,7 @@ namespace ILVM
         
         public void Reset()
         {
+            methodDef = null;
             arguments = null;
             machineStack.Clear();
             machineVar = new object[kArgSize];
@@ -677,7 +680,7 @@ namespace ILVM
             var obj = machineStack.Pop();
             var typeRef = il.Operand as TypeReference;
             var typeInfo = GetTypeInfoFromTypeReference(typeRef);
-            if (obj.GetType() == typeInfo)
+            if (typeInfo.IsAssignableFrom(obj.GetType()))
                 machineStack.Push(obj);
             else
                 machineStack.Push(null);
@@ -1465,6 +1468,9 @@ namespace ILVM
         private bool ExecuteBrtrue(int offset)
         {
             var val = machineStack.Pop();
+            if (val == null)
+                return true;
+
             if (val is Boolean)
             {
                 if ((Boolean)val)
@@ -1488,8 +1494,7 @@ namespace ILVM
             }
             else if (!val.GetType().IsValueType)
             {
-                if (val != null)
-                    return ExecuteBr(offset);
+                return ExecuteBr(offset);
             }
             else
             { 
@@ -1502,6 +1507,9 @@ namespace ILVM
         private bool ExecuteBrfalse(int offset)
         {
             var val = machineStack.Pop();
+            if (val == null)
+                return ExecuteBr(offset);
+
             if (val is Boolean)
             {
                 if (!(Boolean)val)
@@ -1525,8 +1533,7 @@ namespace ILVM
             }
             else if (!val.GetType().IsValueType)
             {
-                if (val == null)
-                    return ExecuteBr(offset);
+                return true;
             }
             else
             {
