@@ -903,9 +903,9 @@ namespace ILVM
 
         private int GetPriorityOfNumber(object num)
         {
-            if (num is Byte)
-                return 1;
             if (num is Boolean)
+                return 1;
+            if (num is Byte || num is SByte)
                 return 2;
             if (num is Int16 || num is UInt16)
                 return 3;
@@ -1261,7 +1261,9 @@ namespace ILVM
             var bPriority = GetPriorityOfNumber(b);
             var val = aPriority > bPriority ? a : b;
             var result = false;
-            if (val is Byte)
+            if (val is Boolean)
+                result = (Boolean)a == (Boolean)b;
+            else if (val is Byte)
                 result = ((Byte)Convert.ChangeType(a, typeof(Byte)) == (Byte)Convert.ChangeType(b, typeof(Byte)));
             else if (val is Int16)
                 result = ((Int16)Convert.ChangeType(a, typeof(Int16)) == (Int16)Convert.ChangeType(b, typeof(Int16)));
@@ -1269,6 +1271,8 @@ namespace ILVM
                 result = ((Int32)Convert.ChangeType(a, typeof(Int32)) == (Int32)Convert.ChangeType(b, typeof(Int32)));
             else if (val is Int64)
                 result = ((Int64)Convert.ChangeType(a, typeof(Int64)) == (Int64)Convert.ChangeType(b, typeof(Int64)));
+            else if (val is SByte)
+                result = ((SByte)Convert.ChangeType(a, typeof(SByte)) == (SByte)Convert.ChangeType(b, typeof(SByte)));
             else if (val is UInt16)
                 result = ((UInt16)Convert.ChangeType(a, typeof(UInt16)) == (UInt16)Convert.ChangeType(b, typeof(UInt16)));
             else if (val is UInt32)
@@ -1279,6 +1283,8 @@ namespace ILVM
                 result = ((Single)Convert.ChangeType(a, typeof(Single)) == (Single)Convert.ChangeType(b, typeof(Single)));
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) == (Double)Convert.ChangeType(b, typeof(Double)));
+            else if (val is Enum)
+                result = (Int32)a == (Int32)b;
             else
                 return false;
 
@@ -1297,7 +1303,9 @@ namespace ILVM
             var bPriority = GetPriorityOfNumber(b);
             var val = aPriority > bPriority ? a : b;
             var result = false;
-            if (val is Byte)
+            if (val is Boolean)
+                result = (Boolean)a != (Boolean)b;
+            else if (val is Byte)
                 result = ((Byte)Convert.ChangeType(a, typeof(Byte)) != (Byte)Convert.ChangeType(b, typeof(Byte)));
             else if (val is Int16)
                 result = ((Int16)Convert.ChangeType(a, typeof(Int16)) != (Int16)Convert.ChangeType(b, typeof(Int16)));
@@ -1305,6 +1313,8 @@ namespace ILVM
                 result = ((Int32)Convert.ChangeType(a, typeof(Int32)) != (Int32)Convert.ChangeType(b, typeof(Int32)));
             else if (val is Int64)
                 result = ((Int64)Convert.ChangeType(a, typeof(Int64)) != (Int64)Convert.ChangeType(b, typeof(Int64)));
+            else if (val is SByte)
+                result = ((SByte)Convert.ChangeType(a, typeof(SByte)) != (SByte)Convert.ChangeType(b, typeof(SByte)));
             else if (val is UInt16)
                 result = ((UInt16)Convert.ChangeType(a, typeof(UInt16)) != (UInt16)Convert.ChangeType(b, typeof(UInt16)));
             else if (val is UInt32)
@@ -1315,6 +1325,8 @@ namespace ILVM
                 result = ((Single)Convert.ChangeType(a, typeof(Single)) != (Single)Convert.ChangeType(b, typeof(Single)));
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) != (Double)Convert.ChangeType(b, typeof(Double)));
+            else if (val is Enum)
+                result = (Int32)a != (Int32)b;
             else
                 return false;
 
@@ -1341,6 +1353,8 @@ namespace ILVM
                 result = ((Int32)Convert.ChangeType(a, typeof(Int32)) >= (Int32)Convert.ChangeType(b, typeof(Int32)));
             else if (val is Int64)
                 result = ((Int64)Convert.ChangeType(a, typeof(Int64)) >= (Int64)Convert.ChangeType(b, typeof(Int64)));
+            else if (val is SByte)
+                result = ((SByte)Convert.ChangeType(a, typeof(SByte)) >= (SByte)Convert.ChangeType(b, typeof(SByte)));
             else if (val is UInt16)
                 result = ((UInt16)Convert.ChangeType(a, typeof(UInt16)) >= (UInt16)Convert.ChangeType(b, typeof(UInt16)));
             else if (val is UInt32)
@@ -1351,6 +1365,8 @@ namespace ILVM
                 result = ((Single)Convert.ChangeType(a, typeof(Single)) >= (Single)Convert.ChangeType(b, typeof(Single)));
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) >= (Double)Convert.ChangeType(b, typeof(Double)));
+            else if (val is Enum)
+                result = (Int32)a >= (Int32)b;
             else
                 return false;
 
@@ -1377,6 +1393,8 @@ namespace ILVM
                 result = ((Int32)Convert.ChangeType(a, typeof(Int32)) > (Int32)Convert.ChangeType(b, typeof(Int32)));
             else if (val is Int64)
                 result = ((Int64)Convert.ChangeType(a, typeof(Int64)) > (Int64)Convert.ChangeType(b, typeof(Int64)));
+            else if (val is SByte)
+                result = ((SByte)Convert.ChangeType(a, typeof(SByte)) > (SByte)Convert.ChangeType(b, typeof(SByte)));
             else if (val is UInt16)
                 result = ((UInt16)Convert.ChangeType(a, typeof(UInt16)) > (UInt16)Convert.ChangeType(b, typeof(UInt16)));
             else if (val is UInt32)
@@ -1387,6 +1405,8 @@ namespace ILVM
                 result = ((Single)Convert.ChangeType(a, typeof(Single)) > (Single)Convert.ChangeType(b, typeof(Single)));
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) > (Double)Convert.ChangeType(b, typeof(Double)));
+            else if (val is Enum)
+                result = (Int32)a > (Int32)b;
             else
                 return false;
 
@@ -1413,6 +1433,8 @@ namespace ILVM
                 result = ((Int32)Convert.ChangeType(a, typeof(Int32)) <= (Int32)Convert.ChangeType(b, typeof(Int32)));
             else if (val is Int64)
                 result = ((Int64)Convert.ChangeType(a, typeof(Int64)) <= (Int64)Convert.ChangeType(b, typeof(Int64)));
+            else if (val is SByte)
+                result = ((SByte)Convert.ChangeType(a, typeof(SByte)) <= (SByte)Convert.ChangeType(b, typeof(SByte)));
             else if (val is UInt16)
                 result = ((UInt16)Convert.ChangeType(a, typeof(UInt16)) <= (UInt16)Convert.ChangeType(b, typeof(UInt16)));
             else if (val is UInt32)
@@ -1423,6 +1445,8 @@ namespace ILVM
                 result = ((Single)Convert.ChangeType(a, typeof(Single)) <= (Single)Convert.ChangeType(b, typeof(Single)));
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) <= (Double)Convert.ChangeType(b, typeof(Double)));
+            else if (val is Enum)
+                result = (Int32)a <= (Int32)b;
             else
                 return false;
 
@@ -1449,6 +1473,8 @@ namespace ILVM
                 result = ((Int32)Convert.ChangeType(a, typeof(Int32)) < (Int32)Convert.ChangeType(b, typeof(Int32)));
             else if (val is Int64)
                 result = ((Int64)Convert.ChangeType(a, typeof(Int64)) < (Int64)Convert.ChangeType(b, typeof(Int64)));
+            else if (val is SByte)
+                result = ((SByte)Convert.ChangeType(a, typeof(SByte)) < (SByte)Convert.ChangeType(b, typeof(SByte)));
             else if (val is UInt16)
                 result = ((UInt16)Convert.ChangeType(a, typeof(UInt16)) < (UInt16)Convert.ChangeType(b, typeof(UInt16)));
             else if (val is UInt32)
@@ -1459,6 +1485,8 @@ namespace ILVM
                 result = ((Single)Convert.ChangeType(a, typeof(Single)) < (Single)Convert.ChangeType(b, typeof(Single)));
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) < (Double)Convert.ChangeType(b, typeof(Double)));
+            else if (val is Enum)
+                result = (Int32)a < (Int32)b;
             else
                 return false;
 
