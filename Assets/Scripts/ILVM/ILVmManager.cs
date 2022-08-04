@@ -543,16 +543,6 @@ namespace ILVM
             return methodInfos.ContainsKey(methodId);
         }
 
-        public static ILVirtualMachine VM
-        {
-            get
-            {
-                if (vm == null)
-                    vm = new ILVirtualMachine();
-                return vm;
-            }
-        }
-        private static ILVirtualMachine vm;
 
         public static void MethodReturnVoidWrapper(object[] objList)
         {
@@ -565,7 +555,10 @@ namespace ILVM
             var param = new object[len];
             for (var i = 0; i != len; ++i)
                 param[i] = objList[i + offset];
-            VM.Execute(methodInfo.methodDef, param);
+
+            var vm = VMPool.GetFromPool();
+            vm.Execute(methodInfo.methodDef, param);
+            VMPool.BackToPool(vm);
         }
 
         public static object MethodReturnObjectWrapper(object[] objList)
@@ -579,7 +572,11 @@ namespace ILVM
             var param = new object[len];
             for (var i = 0; i != len; ++i)
                 param[i] = objList[i + offset];
-            return VM.Execute(methodInfo.methodDef, param);
+
+            var vm = VMPool.GetFromPool();
+            var ret = vm.Execute(methodInfo.methodDef, param);
+            VMPool.BackToPool(vm);
+            return ret;
         }
     }
 }

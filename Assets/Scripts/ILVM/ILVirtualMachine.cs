@@ -129,6 +129,39 @@ namespace ILVM
         }
     }
 
+    public class VMPool
+    {
+        private static List<ILVirtualMachine> vmPoolIdle = new List<ILVirtualMachine>();
+        private static List<ILVirtualMachine> vmPoolUsing = new List<ILVirtualMachine>();
+
+        public static ILVirtualMachine GetFromPool()
+        {
+            ILVirtualMachine vm;
+            if (vmPoolIdle.Count > 0)
+            {
+                var lastIdx = vmPoolIdle.Count - 1;
+                vm = vmPoolIdle[lastIdx];
+                vmPoolIdle.RemoveAt(lastIdx);
+            }
+            else
+                vm = new ILVirtualMachine();
+
+            vmPoolUsing.Add(vm);
+            return vm;
+        }
+
+        public static void BackToPool(ILVirtualMachine vm)
+        {
+            var idx = vmPoolUsing.IndexOf(vm);
+            if (idx < 0)
+                return;
+
+            var lastIdx = vmPoolUsing.Count - 1;
+            vmPoolUsing[idx] = vmPoolUsing[lastIdx];
+            vmPoolUsing.RemoveAt(lastIdx);
+        }
+    }
+
     public class ILVirtualMachine
     {
         private MethodDefinition methodDef;
@@ -200,10 +233,25 @@ namespace ILVM
             object ret = null;
             if (succ && machineStack.Count > 0)
                 ret = machineStack.Pop();
+
+            Logger.Log("============================ execute finished: {0}.{1} \t{2}", args != null ? args[0].GetType().ToString() : "null", mtd, succ);
+            Reset();
+
+            return ret;
+        }
+
+        
+        public void Reset()
+        {
             arguments = null;
             machineStack.Clear();
+            machineVar = new object[kArgSize];
+            machineVarType = new Type[kArgSize];
+
             offset2idx.Clear();
-            return ret;
+            SetEBP(0);
+
+            // TODO: may need clear VMAddr this vm used?
         }
 
         private int ebp = 0;
@@ -1675,8 +1723,9 @@ namespace ILVM
                 paramLst[i] = paramVal;
             }
 
-            var innerVm = new ILVirtualMachine();
+            var innerVm = VMPool.GetFromPool();
             var ret = innerVm.Execute(methodDef, paramLst);
+            VMPool.BackToPool(innerVm);
 
             // handle 'Ref' parameters
             for (var i = 1; i != paramCnt; ++i)
