@@ -744,10 +744,13 @@ namespace ILVM
             object result = objVar;
             if (!tarType.IsAssignableFrom(curType))
             {
-                // hack here, handle store int to bool type
-                if (tarType == typeof(Boolean))
+                if (tarType == typeof(Boolean)) // hack here, handle store int to bool type
                 {
                     result = (Int32)Convert.ChangeType(objVar, typeof(Int32)) != 0;
+                }
+                else if (tarType.IsEnum)        // handle store int to enum type
+                {
+                    result = Enum.ToObject(tarType, objVar);
                 }
                 else
                 {
