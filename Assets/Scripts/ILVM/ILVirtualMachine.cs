@@ -188,7 +188,7 @@ namespace ILVM
 
             // Print all IL
             var sb = new System.Text.StringBuilder();
-            sb.AppendFormat("============================ execute new: {0}.{1} \t{2}", args != null ? args[0].GetType().ToString() : "null", mtd, ilLst.Count);
+            sb.AppendFormat("============================ execute new: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, ilLst.Count);
             sb.AppendLine();
             foreach (var il in ilLst)
             {
@@ -198,8 +198,8 @@ namespace ILVM
             Logger.Log(sb.ToString());
 
             methodDef = mtd;
-            arguments = args;
             machineStack.Clear();
+            InitArgument(args);
             InitLocalVar(mtd);
 
             // save offset
@@ -236,7 +236,7 @@ namespace ILVM
             if (succ && machineStack.Count > 0)
                 ret = machineStack.Pop();
 
-            Logger.Log("============================ execute finished: {0}.{1} \t{2}", args != null ? args[0].GetType().ToString() : "null", mtd, succ);
+            Logger.Log("============================ execute finished: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, succ);
             Reset();
 
             return ret;
@@ -267,14 +267,25 @@ namespace ILVM
             return ebp;
         }
 
+        private void InitArgument(object[] args)
+        {
+            arguments = args;
+            if (methodDef.IsStatic)
+            {
+                for (var i = 0; i <= arguments.Length - 2; ++i)
+                    arguments[i] = arguments[i + 1];
+            }
+        }
+
         private void InitLocalVar(MethodDefinition methodDef)
         {
             var varLst = methodDef.Body.Variables;
             for (var i = 0; i != varLst.Count; ++i)
             {
-                var varDef = varLst[i];
-                machineVar[i] = null;
-                machineVarType[i] = GetTypeInfoFromTypeReference(varDef.VariableType);
+                var varType = GetTypeInfoFromTypeReference(varLst[i].VariableType);
+                var varObj = varType.IsValueType ? Activator.CreateInstance(varType) : null;
+                machineVar[i] = varObj;
+                machineVarType[i] = varType;
             }
         }
 
@@ -309,6 +320,8 @@ namespace ILVM
                     return ExecuteInitobj(il);
                 case Code.Isinst: 
                     return ExecuteIsinst(il);
+                case Code.Stobj: 
+                    return ExecuteStobj(il);
 
                 case Code.Ldelem_I:
                 case Code.Ldelem_I1:
@@ -424,21 +437,47 @@ namespace ILVM
                     return ExecuteLoadArg(3);
                 case Code.Ldarg_S:
                 case Code.Ldarg:
-                    return ExecuteLoadArg((int)il.Operand);
+                    int ldargIdx;
+                    if (il.Operand is ParameterDefinition)
+                        ldargIdx = (il.Operand as ParameterDefinition).Index;
+                    else
+                        ldargIdx = (int)il.Operand;
+                    return ExecuteLoadArg(ldargIdx);
                 case Code.Ldarga:
                 case Code.Ldarga_S:
-                    return ExecuteLoadArgAddr(il.Operand as ParameterDefinition);
+                    int ldargaIdx;
+                    if (il.Operand is ParameterDefinition)
+                        ldargaIdx = (il.Operand as ParameterDefinition).Index;
+                    else
+                        ldargaIdx = (int)il.Operand;
+                    return ExecuteLoadArgAddr(ldargaIdx);
 
                 //case Code.Ldflda:
                 case Code.Ldfld:
-                    return ExecuteLdfld(il.Operand as FieldDefinition);
+                    var ldfldFieldDef = il.Operand as FieldDefinition;
+                    if (ldfldFieldDef == null)
+                        ldfldFieldDef = (il.Operand as FieldReference)?.Resolve();
+                    Assert.IsNotNull(ldfldFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    return ExecuteLdfld(ldfldFieldDef);
                 //case Code.Ldsflda:
                 case Code.Ldsfld:
-                    return ExecuteLdsfld(il.Operand as FieldDefinition);
+                    var ldsfldFieldDef = il.Operand as FieldDefinition;
+                    if (ldsfldFieldDef == null)
+                        ldsfldFieldDef = (il.Operand as FieldReference)?.Resolve();
+                    Assert.IsNotNull(ldsfldFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    return ExecuteLdsfld(ldsfldFieldDef);
                 case Code.Stfld:
-                    return ExecuteStfld(il.Operand as FieldDefinition);
+                    var stfldFieldDef = il.Operand as FieldDefinition;
+                    if (stfldFieldDef == null)
+                        stfldFieldDef = (il.Operand as FieldReference)?.Resolve();
+                    Assert.IsNotNull(stfldFieldDef, string.Format("Stfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    return ExecuteStfld(stfldFieldDef);
                 case Code.Stsfld:
-                    return ExecuteStsfld(il.Operand as FieldDefinition);
+                    var stsfldFieldDef = il.Operand as FieldDefinition;
+                    if (stsfldFieldDef == null)
+                        stsfldFieldDef = (il.Operand as FieldReference)?.Resolve();
+                    Assert.IsNotNull(stsfldFieldDef, string.Format("Stsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    return ExecuteStsfld(stsfldFieldDef);
 
                 case Code.Ldind_I:
                 case Code.Ldind_I1:
@@ -584,9 +623,9 @@ namespace ILVM
                 case Code.Constrained: 
                     return ExecuteConstrained(il.Operand as TypeDefinition);
                 case Code.Call:
-                    return ExecuteCall(il);
+                    return ExecuteCall(il.Operand as MethodReference);
                 case Code.Callvirt:
-                    return ExecuteCallvirt(il);
+                    return ExecuteCallvirt(il.Operand as MethodReference);
 
                 default:
                     return ExecuteFailed(il);
@@ -635,21 +674,7 @@ namespace ILVM
 
         private bool ExecuteNewobj(MethodReference methodRef)
         {
-            object[] parameters = null;
-            var paramCnt = methodRef.Parameters.Count;
-            if (paramCnt > 0)
-            {
-                parameters = new object[paramCnt];
-                for (var i = 0; i != paramCnt; ++i)
-                {
-                    parameters[paramCnt - i - 1] = machineStack.Pop();
-                }
-            }
-
-            var constructorInfo = GetConstructorFromMethodReference(methodRef, parameters);
-            var ret = constructorInfo.Invoke(parameters);
-            machineStack.Push(ret);
-            return true;
+            return ExecuteCallConstructor(methodRef, false);
         }
 
         private bool ExecuteNewarr(Type elemType)
@@ -684,6 +709,14 @@ namespace ILVM
                 machineStack.Push(obj);
             else
                 machineStack.Push(null);
+            return true;
+        }
+
+        private bool ExecuteStobj(Instruction il)
+        {
+            var obj = machineStack.Pop();
+            var addr = machineStack.Pop() as VMAddr;
+            addr.SetObj(obj);
             return true;
         }
 
@@ -735,7 +768,7 @@ namespace ILVM
             machineStack.Push(value);
             return true;
         }
-
+        
         private bool ExecuteStoreLocal(int index)
         {
             var objVar = machineStack.Pop();
@@ -785,30 +818,21 @@ namespace ILVM
             return true;
         }
 
-        private bool ExecuteLoadArgAddr(ParameterDefinition paramDef)
+        private bool ExecuteLoadArgAddr(int index)
         {
-            var idx = -1;
-            for (var i = 0; i != this.methodDef.Parameters.Count; ++i)
-            {
-                if (this.methodDef.Parameters[i] == paramDef)
-                {
-                    idx = i;
-                    break;
-                }
-            }
-            if (idx < 0)
-                return false;
-
-            var addr = VMAddr.Create(arguments[idx + 1]);
-            arguments[idx + 1] = addr;
+            var addr = VMAddr.Create(arguments[index]);
+            arguments[index] = addr;
             machineStack.Push(addr);
-
             return true;
         }
 
         private bool ExecuteLdfld(FieldDefinition fieldDef)
         {
             var obj = machineStack.Pop();
+            var addr = obj as VMAddr;
+            if (addr != null)
+                obj = addr.GetObj();
+
             var typeInfo = obj.GetType();
             var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
             FieldInfo fieldInfo = null;
@@ -900,7 +924,7 @@ namespace ILVM
             addr.SetObj(val);
             return true;
         }
-
+        
         private int GetPriorityOfNumber(object num)
         {
             if (num is Boolean)
@@ -1251,7 +1275,7 @@ namespace ILVM
             machineStack.Push(val);
             return true;
         }
-
+        
         private bool ExecuteBeq(int offset)
         {
             var b = machineStack.Pop();
@@ -1698,7 +1722,7 @@ namespace ILVM
         }
 
 
-        private object InternalCall(Instruction il, MethodInfo methodInfo, object instance, object[] parameters, bool virtualCall)
+        private object InternalCall(MethodReference methodRef, MethodInfo methodInfo, object instance, object[] parameters, bool virtualCall)
         {
             // parameters type cast
             var paramInfoLst = methodInfo.GetParameters();
@@ -1744,7 +1768,6 @@ namespace ILVM
             // 但实现上，我们无法使用 DynamicMethod（版本低），Delegate 的方式也无效（https://stackoverflow.com/questions/4357729/use-reflection-to-invoke-an-overridden-base-method）；
             // 故 hack 处理，将此类函数，也进行虚拟机解释执行；
             // 以避免在解释执行的函数中调用其基类函数，结果多态调用到自己触发死循环；
-            var methodRef = il.Operand as MethodReference;
             var methodDef = methodRef.Resolve();
             var paramCnt = 1 + (parameters != null ? parameters.Length : 0);
             var paramLst = new object[paramCnt];
@@ -1777,14 +1800,17 @@ namespace ILVM
             return ret;
         }
 
-        private bool ExecuteCall(Instruction il, bool virtualCall = false)
+        private bool ExecuteCall(MethodReference methodRef, bool virtualCall = false)
         {
-            var methodRef = il.Operand as MethodReference;
             var methodDef = methodRef.Resolve();
 
             // handle property method
             if (methodDef.IsSetter || methodDef.IsGetter)
-                return ExecuteCallProp(il);
+                return ExecuteCallProp(methodRef);
+
+            // handle constructor
+            if (methodDef.IsConstructor)
+                return ExecuteCallConstructor(methodRef, true);
 
             object[] parameters = null;
             VMAddr[] paramAddrs = null;
@@ -1838,7 +1864,7 @@ namespace ILVM
                     }
                     methodInfo = methodInfo.MakeGenericMethod(genericParams);
                 }
-                result = InternalCall(il, methodInfo, instance, parameters, virtualCall);
+                result = InternalCall(methodRef, methodInfo, instance, parameters, virtualCall);
             }
             catch (Exception e)
             {
@@ -1866,14 +1892,13 @@ namespace ILVM
             return true;
         }
 
-        private bool ExecuteCallvirt(Instruction il)
+        private bool ExecuteCallvirt(MethodReference methodRef)
         {
-            return ExecuteCall(il, true);
+            return ExecuteCall(methodRef, true);
         }
 
-        private bool ExecuteCallProp(Instruction il)
+        private bool ExecuteCallProp(MethodReference methodRef)
         {
-            var methodRef = il.Operand as MethodReference;
             var methodDef = methodRef.Resolve();
             var propInfo = GetPropInfoFromMethodReference(methodRef);
             if (propInfo == null)
@@ -1946,6 +1971,52 @@ namespace ILVM
             return true;
         }
 
+        private bool ExecuteCallConstructor(MethodReference methodRef, bool hasAddrOnStack)
+        {
+            object[] parameters = null;
+            VMAddr[] paramAddrs = null;
+            if (methodRef.HasParameters)
+            {
+                parameters = new object[methodRef.Parameters.Count];
+                paramAddrs = new VMAddr[methodRef.Parameters.Count];
+                for (var i = 0; i != methodRef.Parameters.Count; ++i)
+                {
+                    var paramVal = machineStack.Pop();
+                    if (paramVal is VMAddr)
+                    {
+                        var addr = paramVal as VMAddr;
+                        paramAddrs[i] = addr;
+                        paramVal = addr.GetObj();
+                    }
+                    parameters[methodRef.Parameters.Count - i - 1] = paramVal;
+                }
+            }
+
+            VMAddr instAddr = null;
+            if (hasAddrOnStack)
+                instAddr = machineStack.Pop() as VMAddr;
+
+            // invoke
+            var constructorInfo = GetConstructorFromMethodReference(methodRef, parameters);
+            var ret = constructorInfo.Invoke(parameters);
+            machineStack.Push(ret);
+            
+            // addr handles
+            if (instAddr != null)
+                instAddr.SetObj(ret);
+            if (paramAddrs != null)
+            {
+                for (var i = 0; i != paramAddrs.Length; ++i)
+                {
+                    var paramAddr = paramAddrs[i];
+                    if (paramAddr == null)
+                        continue;
+                    paramAddr.SetObj(parameters[paramAddrs.Length - i - 1]);
+                }
+            }
+
+            return true;
+        }
 
         private Type GetTypeInfoFromTypeReference(TypeReference typeRef)
         {
