@@ -38,6 +38,11 @@ namespace ILVM
             DelAddr(this);
         }
 
+        public override string ToString()
+        {
+            return string.Format("VMAddr({0}): {1}", addrIdx, obj);
+        }
+
         private static Dictionary<ulong, VMAddr> addrDict = new Dictionary<ulong, VMAddr>();
         private static ulong addrIndexer = 0;
 
@@ -52,6 +57,7 @@ namespace ILVM
 
         public static void Clear()
         {
+            addrIndexer = 0;
             addrDict.Clear();
         }
 
@@ -233,7 +239,7 @@ namespace ILVM
             }
 
             object ret = null;
-            if (succ && machineStack.Count > 0)
+            if (methodDef.ReturnType.FullName != "System.Void" && succ && machineStack.Count > 0)
                 ret = machineStack.Pop();
 
             Logger.Log("============================ execute finished: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, succ);
@@ -320,6 +326,8 @@ namespace ILVM
                     return ExecuteInitobj(il);
                 case Code.Isinst: 
                     return ExecuteIsinst(il);
+                case Code.Ldobj: 
+                    return ExecuteLdobj(il);
                 case Code.Stobj: 
                     return ExecuteStobj(il);
 
@@ -712,6 +720,14 @@ namespace ILVM
             return true;
         }
 
+        private bool ExecuteLdobj(Instruction il)
+        {
+            var addr = machineStack.Pop() as VMAddr;
+            var obj = addr.GetObj();
+            machineStack.Push(obj);
+            return true;
+        }
+
         private bool ExecuteStobj(Instruction il)
         {
             var obj = machineStack.Pop();
@@ -912,7 +928,6 @@ namespace ILVM
             Assert.IsNotNull(addr);
             var val = addr.GetObj();
             machineStack.Push(val);
-            addr.Dispose();
             return false;
         }
 

@@ -54,7 +54,7 @@ namespace ILVM
 
     public class Logger
     {
-        public static bool EnableLog = true;
+        public static bool EnableLog = false;
 
         public static void Log(string message, params object[] args)
         {
@@ -218,7 +218,7 @@ namespace ILVM
             var vmAddrType = assemblyDef.MainModule.GetType("ILVM.VMAddr");
             tr_VMAddr = assemblyDef.MainModule.ImportReference(vmAddrType);
 
-            var vmAddrCtorType = tr_VMAddr.Resolve().Methods.First(mtd => mtd.IsConstructor && mtd.Parameters.Count > 0);
+            var vmAddrCtorType = tr_VMAddr.Resolve().Methods.First(mtd => mtd.Name == "Create");
             mr_VMAddrCtor = assemblyDef.MainModule.ImportReference(vmAddrCtorType);
 
             var vmAddrGetObjType = tr_VMAddr.Resolve().Methods.First(mtd => mtd.Name == "GetObj");
@@ -537,7 +537,7 @@ namespace ILVM
             methodInfos.TryGetValue(methodId, out wrap);
             return wrap;
         }
-
+        
         public static bool HasMethodInfo(int methodId)
         {
             return methodInfos.ContainsKey(methodId);

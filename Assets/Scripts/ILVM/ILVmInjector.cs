@@ -43,7 +43,7 @@ namespace ILVM
                 }
             }
             var filter = JsonUtility.FromJson<ILVmInjectConfig>(jsonData);
-
+            
             foreach (var name in filter.injectClass)
             {
                 var type = GetTypeInAssembly(name);
@@ -114,8 +114,16 @@ namespace ILVM
             LoadInjectConfig();
             var allTypes = injectClass.Count > 0 ? injectClass.ToArray() : Assembly.Load("Assembly-CSharp").GetTypes();
             return (from type in allTypes
-                    where FilterClass(type)
+                    where FilterClass(type) 
                     select type);
+        }
+
+        public static bool IsInjected()
+        {
+            using (var assemblyHandle = new AssemblyHandle())
+            {
+                return assemblyHandle.IsInjected();
+            }
         }
 
         public static void Inject()
@@ -323,7 +331,7 @@ namespace ILVM
                 var elemType = (paramType as ByReferenceType).GetElementType();
                 ilList.Add(Instruction.Create(OpCodes.Ldobj, elemType));
                 ilList.Add(Instruction.Create(OpCodes.Box, elemType));
-                ilList.Add(Instruction.Create(OpCodes.Newobj, assemblyHandle.MR_VMAddrCtor.Resolve()));
+                ilList.Add(Instruction.Create(OpCodes.Call, assemblyHandle.MR_VMAddrCtor.Resolve()));
             }
         }
 
@@ -392,7 +400,7 @@ namespace ILVM
                     var elemType = (param.ParameterType as ByReferenceType).GetElementType();
 
                     // load ref
-                    ilList.Add(GetLdargInstruction(i + 1, method));
+                    ilList.Add(GetLdargInstruction(i, method));
 
                     // load param arr
                     ilList.Add(GetLdlocInstruction(method.Body.Variables.Count - 1, method));
@@ -545,12 +553,12 @@ namespace ILVM
             }
             else if (idx < 256)
             {
-                var arg = methodDef.Parameters[idx - 1];
+                var arg = methodDef.Parameters[idx];
                 il = Instruction.Create(OpCodes.Ldarg_S, arg);
             }
             else
             {
-                var arg = methodDef.Parameters[idx - 1];
+                var arg = methodDef.Parameters[idx];
                 il = Instruction.Create(OpCodes.Ldarg, arg);
             }
             return il;
