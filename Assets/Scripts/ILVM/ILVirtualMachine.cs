@@ -11,67 +11,6 @@ using UnityEngine.Assertions;
 
 namespace ILVM
 {
-    public class VMAddr : IDisposable
-    {
-        private object obj;
-        private ulong addrIdx = 0;
-
-        private VMAddr(object o)
-        {
-            obj = o;
-            AddAddr(this);
-        }
-
-        public void SetObj(object o)
-        {
-            obj = o;
-        }
-
-        public object GetObj()
-        {
-            return obj;
-        }
-
-        public void Dispose()
-        {
-            obj = null;
-            DelAddr(this);
-        }
-
-        public override string ToString()
-        {
-            return string.Format("VMAddr({0}): {1}", addrIdx, obj);
-        }
-
-        private static Dictionary<ulong, VMAddr> addrDict = new Dictionary<ulong, VMAddr>();
-        private static ulong addrIndexer = 0;
-
-        public static VMAddr Create(object o)
-        {
-            if (o is VMAddr)
-                return o as VMAddr;
-
-            var addr = new VMAddr(o);
-            return addr;
-        }
-
-        public static void Clear()
-        {
-            addrIndexer = 0;
-            addrDict.Clear();
-        }
-
-        private static void AddAddr(VMAddr addr)
-        {
-            addr.addrIdx = addrIndexer++;
-            addrDict.Add(addr.addrIdx, addr);
-        }
-
-        private static void DelAddr(VMAddr addr)
-        {
-            addrDict.Remove(addr.addrIdx);
-        }
-    }
 
     public class VMStack : IEnumerable
     {
@@ -460,20 +399,30 @@ namespace ILVM
                         ldargaIdx = (int)il.Operand;
                     return ExecuteLoadArgAddr(ldargaIdx);
 
-                //case Code.Ldflda:
                 case Code.Ldfld:
                     var ldfldFieldDef = il.Operand as FieldDefinition;
                     if (ldfldFieldDef == null)
                         ldfldFieldDef = (il.Operand as FieldReference)?.Resolve();
                     Assert.IsNotNull(ldfldFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteLdfld(ldfldFieldDef);
-                //case Code.Ldsflda:
+                case Code.Ldflda:
+                    var ldfldaFieldDef = il.Operand as FieldDefinition;
+                    if (ldfldaFieldDef == null)
+                        ldfldaFieldDef = (il.Operand as FieldReference)?.Resolve();
+                    Assert.IsNotNull(ldfldaFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    return ExecuteLdflda(ldfldaFieldDef);
                 case Code.Ldsfld:
                     var ldsfldFieldDef = il.Operand as FieldDefinition;
                     if (ldsfldFieldDef == null)
                         ldsfldFieldDef = (il.Operand as FieldReference)?.Resolve();
                     Assert.IsNotNull(ldsfldFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteLdsfld(ldsfldFieldDef);
+                case Code.Ldsflda:
+                    var ldsfldaFieldDef = il.Operand as FieldDefinition;
+                    if (ldsfldaFieldDef == null)
+                        ldsfldaFieldDef = (il.Operand as FieldReference)?.Resolve();
+                    Assert.IsNotNull(ldsfldaFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    return ExecuteLdsflda(ldsfldaFieldDef);
                 case Code.Stfld:
                     var stfldFieldDef = il.Operand as FieldDefinition;
                     if (stfldFieldDef == null)
@@ -866,6 +815,30 @@ namespace ILVM
             return true;
         }
 
+        private bool ExecuteLdflda(FieldDefinition fieldDef)
+        {
+            var obj = machineStack.Pop();
+            var addr = obj as VMAddr;
+            if (addr != null)
+                obj = addr.GetObj();
+
+            var typeInfo = obj.GetType();
+            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+            FieldInfo fieldInfo = null;
+            while (typeInfo != null)
+            {
+                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
+                if (fieldInfo != null)
+                    break;
+                typeInfo = typeInfo.BaseType;
+            }
+            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, obj.GetType()));
+
+            var fieldAddr = VMAddrForFieldInfo.Create(new VMAddrForFieldInfo.VMAddrForFieldInfoData(fieldInfo, obj));
+            machineStack.Push(fieldAddr);
+            return true;
+        }
+
         private bool ExecuteLdsfld(FieldDefinition fieldDef)
         {
             var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
@@ -882,6 +855,25 @@ namespace ILVM
 
             var val = fieldInfo.GetValue(null);
             machineStack.Push(val);
+            return true;
+        }
+
+        private bool ExecuteLdsflda(FieldDefinition fieldDef)
+        {
+            var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
+            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+            FieldInfo fieldInfo = null;
+            while (typeInfo != null)
+            {
+                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
+                if (fieldInfo != null)
+                    break;
+                typeInfo = typeInfo.BaseType;
+            }
+            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, fieldDef.DeclaringType.FullName));
+
+            var fieldAddr = VMAddrForFieldInfo.Create(new VMAddrForFieldInfo.VMAddrForFieldInfoData(fieldInfo, null));
+            machineStack.Push(fieldAddr);
             return true;
         }
 
