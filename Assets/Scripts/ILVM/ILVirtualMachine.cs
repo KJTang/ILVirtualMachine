@@ -173,7 +173,7 @@ namespace ILVM
     public class ILVirtualMachine
     {
         private MethodDefinition methodDef;
-        private const int kArgSize = 32;
+        private const int kArgSize = 128;
         private object[] arguments = null;
 
         private VMStack machineStack = new VMStack();
@@ -1868,14 +1868,14 @@ namespace ILVM
             {
                 if (methodInfo.IsGenericMethodDefinition)
                 {
-                    var genericParams = new Type[parameters.Length];
-                    for (int i = 0, j = 0; i != methodInfo.GetParameters().Length; ++i)
+                    // trait generic type from methodRef
+                    var genericParams = new Type[methodInfo.GetGenericArguments().Length];
+                    var genericMethodRef = methodRef as GenericInstanceMethod;
+                    for (var i = 0; i != genericMethodRef.GenericArguments.Count; ++i)
                     {
-                        if (methodInfo.GetParameters()[i].ParameterType.IsGenericType)
-                        {
-                            genericParams[j] = parameters[i].GetType();
-                            j += 1;
-                        }
+                        var genericTypeRef = genericMethodRef.GenericArguments[i];
+                        var genericTypeInfo = GetTypeInfoFromTypeReference(genericTypeRef);
+                        genericParams[i] = genericTypeInfo;
                     }
                     methodInfo = methodInfo.MakeGenericMethod(genericParams);
                 }
