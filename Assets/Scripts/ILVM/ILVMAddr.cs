@@ -113,4 +113,44 @@ namespace ILVM
             return addr;
         }
     }
+
+
+    public class VMAddrForArray : VMAddr
+    {
+        public class VMAddrForArrayData
+        {
+            public int index;
+            public Array inst;
+
+            public VMAddrForArrayData(Array a, int i)
+            {
+                inst = a;
+                index = i;
+            }
+        }
+        private VMAddrForArrayData arrayData;
+
+        protected VMAddrForArray(object o, VMAddrForArrayData data) : base(o)
+        {
+            arrayData = data;
+        }
+
+        public override void SetObj(object o)
+        {
+            arrayData.inst.SetValue(o, arrayData.index);
+        }
+
+        public override object GetObj()
+        {
+            var val = arrayData.inst.GetValue(arrayData.index);
+            return val;
+        }
+
+        
+        public static VMAddr Create(VMAddrForArrayData data)
+        {
+            var addr = new VMAddrForArray(null, data);
+            return addr;
+        }
+    }
 }

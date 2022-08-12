@@ -697,8 +697,7 @@ namespace ILVM
         {
             var idx = (int)machineStack.Pop();
             var arr = machineStack.Pop() as Array;
-            var addr = VMAddr.Create(arr.GetValue(idx));
-            arr.SetValue(addr, idx);
+            var addr = VMAddrForArray.Create(new VMAddrForArray.VMAddrForArrayData(arr, idx));
             machineStack.Push(addr);
             return true;
         }
