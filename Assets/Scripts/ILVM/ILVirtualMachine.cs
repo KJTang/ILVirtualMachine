@@ -112,6 +112,7 @@ namespace ILVM
     public class ILVirtualMachine
     {
         private MethodDefinition methodDef;
+        private MethodInfo methodInfo;
         private const int kArgSize = 128;
         private object[] arguments = null;
 
@@ -120,6 +121,7 @@ namespace ILVM
         private Type[] machineVarType = new Type[kArgSize];
 
         private Dictionary<int, int> offset2idx = new Dictionary<int, int>();
+        private Dictionary<string, Type> genericMap = new Dictionary<string, Type>();
 
         public ILVirtualMachine() {}
 
@@ -127,7 +129,7 @@ namespace ILVM
         /// execute method ils, note that args[0] must be the obj own this method
         /// </summary>
         /// <returns></returns>
-        public object Execute(MethodDefinition mtd, object[] args)
+        public object Execute(MethodDefinition mtd, object[] args, MethodInfo mti = null)
         {
             var ilLst = mtd.Body.Instructions;
 
@@ -143,9 +145,11 @@ namespace ILVM
             Logger.Log(sb.ToString());
 
             methodDef = mtd;
+            methodInfo = mti;
             machineStack.Clear();
+            InitGenericMap();
             InitArgument(args);
-            InitLocalVar(mtd);
+            InitLocalVar();
 
             // save offset
             offset2idx.Clear();
@@ -191,10 +195,12 @@ namespace ILVM
         public void Reset()
         {
             methodDef = null;
+            methodInfo = null;
             arguments = null;
             machineStack.Clear();
             machineVar = new object[kArgSize];
             machineVarType = new Type[kArgSize];
+            genericMap.Clear();
 
             offset2idx.Clear();
             SetEBP(0);
@@ -222,15 +228,56 @@ namespace ILVM
             }
         }
 
-        private void InitLocalVar(MethodDefinition methodDef)
+        private void AddGenericCache(TypeReference typeRef, Type typeInfo)
+        {
+            if (typeRef.IsGenericParameter)
+            {
+                if (!genericMap.ContainsKey(typeRef.Name))
+                    genericMap.Add(typeRef.Name, typeInfo);
+            }
+
+            if (typeRef.IsGenericInstance)
+            {
+                var genericRef = typeRef as GenericInstanceType;
+                for (var i = 0; i != genericRef.GenericArguments.Count; ++i)
+                {
+                    AddGenericCache(genericRef.GenericArguments[i], typeInfo.GetGenericArguments()[i]);
+                }
+            }
+        }
+
+        private void InitGenericMap()
+        {
+            genericMap.Clear();
+            if (methodInfo != null && methodDef.ContainsGenericParameter)
+            {
+                // return type
+                AddGenericCache(methodDef.ReturnType, methodInfo.ReturnType);
+
+                // parameters
+                for (var i = 0; i != methodDef.Parameters.Count; ++i)
+                {
+                    var param = methodDef.Parameters[i];
+                    AddGenericCache(param.ParameterType, methodInfo.GetParameters()[i].ParameterType);
+                }
+            }
+        }
+
+        private void InitLocalVar()
         {
             var varLst = methodDef.Body.Variables;
             for (var i = 0; i != varLst.Count; ++i)
             {
-                var varType = GetTypeInfoFromTypeReference(varLst[i].VariableType);
-                var varObj = varType.IsValueType ? Activator.CreateInstance(varType) : null;
+                var varTypeRef = varLst[i].VariableType;
+                Type varTypeInfo;
+                if (varTypeRef.IsGenericParameter)
+                    varTypeInfo = genericMap[varTypeRef.Name];
+                else
+                    varTypeInfo = GetTypeInfoFromTypeReference(varTypeRef);
+
+                var varObj = varTypeInfo.IsValueType ? Activator.CreateInstance(varTypeInfo) : null;
                 machineVar[i] = varObj;
-                machineVarType[i] = varType;
+                machineVarType[i] = varTypeInfo;
             }
         }
 
@@ -644,8 +691,19 @@ namespace ILVM
 
         private bool ExecuteInitobj(Instruction il)
         {
-            var typeDef = il.Operand as TypeDefinition;
-            var typeInfo = GetTypeByName(typeDef.FullName);
+            TypeDefinition typeDef;
+            Type typeInfo;
+            if (il.Operand is TypeReference)
+            {
+                typeInfo = GetTypeInfoFromTypeReference(il.Operand as TypeReference);
+                typeDef = (il.Operand as TypeReference).Resolve();
+            }
+            else
+            {
+                typeDef = il.Operand as TypeDefinition;
+                typeInfo = GetTypeByName(typeDef.FullName);
+            }
+
             var addr = machineStack.Pop() as VMAddr;
             var obj = addr.GetObj();
             if (typeInfo.IsValueType)
@@ -653,7 +711,6 @@ namespace ILVM
             else
                 obj = null;
             addr.SetObj(obj);
-            machineStack.Push(obj);
             return true;
         }
 
@@ -701,21 +758,27 @@ namespace ILVM
             machineStack.Push(addr);
             return true;
         }
-
+        
         private bool ExecuteLdtoken(Instruction il)
         {
+            if (il.Operand is TypeReference)
+            {
+                var typeRef = il.Operand as TypeReference;
+                var typeInfo = GetTypeInfoFromTypeReference(typeRef);
+                machineStack.Push(typeInfo.TypeHandle);
+                return true;
+            }
+
             if (il.Operand is TypeDefinition)
             {
                 var typeDef = il.Operand as TypeDefinition;
                 var typeInfo = GetTypeByName(typeDef.FullName);
                 machineStack.Push(typeInfo.TypeHandle);
+                return true;
             }
-            else
-            {
-                Logger.Error("ExecuteLdtoken: not support: {0}", il.Operand);
-                return false;
-            }
-            return true;
+
+            Logger.Error("ExecuteLdtoken: not support: {0}", il.Operand);
+            return false;
         }
 
         private bool ExecuteStoreElem()
@@ -736,6 +799,10 @@ namespace ILVM
         private bool ExecuteStoreLocal(int index)
         {
             var objVar = machineStack.Pop();
+            var addr = objVar as VMAddr;
+            if (addr != null)
+                objVar = addr.GetObj();
+
             var curType = objVar.GetType();
             var tarType = machineVarType[index];
             object result = objVar;
@@ -755,6 +822,8 @@ namespace ILVM
                 }
             }
 
+            if (addr != null)
+                addr.SetObj(result);
             machineVar[index] = result;
             return true;
         }
@@ -1762,13 +1831,25 @@ namespace ILVM
                     parameters[i] = (Double)Convert.ChangeType(paramObj, typeof(Double)); 
             }
 
+            var forceExecuteByVM = false;
+            foreach (var customAttr in methodInfo.GetCustomAttributes(false))
+            {
+                if (customAttr is ILVM.VMExecuteAttribute)
+                {
+                    forceExecuteByVM = true;
+                    break;
+                }
+            }
 
-            if (virtualCall)
-                return methodInfo.Invoke(instance, parameters);
+            if (!forceExecuteByVM)
+            {
+                if (virtualCall)
+                   return methodInfo.Invoke(instance, parameters);
 
-            var instType = instance?.GetType();
-            if (instType == null || instType == methodInfo.DeclaringType || typeof(System.Type).IsAssignableFrom(instType))
-                return methodInfo.Invoke(instance, parameters);
+                var instType = instance?.GetType();
+                if (instType == null || instType == methodInfo.DeclaringType || typeof(System.Type).IsAssignableFrom(instType))
+                    return methodInfo.Invoke(instance, parameters);
+            }
 
             // 这里比较麻烦，OpCode 里，Call 直接调用对应的函数地址，Callvirt 会进行多态地调用（即调用 instance 实际类型对应的函数；
             // 但实现上，我们无法使用 DynamicMethod（版本低），Delegate 的方式也无效（https://stackoverflow.com/questions/4357729/use-reflection-to-invoke-an-overridden-base-method）；
@@ -1791,7 +1872,7 @@ namespace ILVM
             }
 
             var innerVm = VMPool.GetFromPool();
-            var ret = innerVm.Execute(methodDef, paramLst);
+            var ret = innerVm.Execute(methodDef, paramLst, methodInfo);
             VMPool.BackToPool(innerVm);
 
             // handle 'Ref' parameters
@@ -2026,8 +2107,13 @@ namespace ILVM
 
         private Type GetTypeInfoFromTypeReference(TypeReference typeRef)
         {
+            if (typeRef.IsGenericParameter && genericMap.ContainsKey(typeRef.Name))
+                return genericMap[typeRef.Name];
             var typeDef = typeRef.Resolve();
             var typeName = typeDef.FullName;
+            
+            if (typeRef.IsPointer)
+                typeName = typeName + "*";
             if (typeRef.IsArray)
                 typeName = typeName + "[]";
             var typeInfo = GetTypeByName(typeName);
@@ -2074,7 +2160,7 @@ namespace ILVM
                 return null;
             if (allMatched.Count == 1)
                 return allMatched[0];
-
+            
             // check param type then
             allMethods = allMatched;
             allMatched = new List<MethodInfo>();
@@ -2099,7 +2185,36 @@ namespace ILVM
                 return null;
             if (allMatched.Count == 1)
                 return allMatched[0];
+            
+            // check param type name
+            allMethods = allMatched;
+            allMatched = new List<MethodInfo>();
+            foreach (var method in allMethods)
+            {
+                var matched = true;
+                for (var i = 0; i != method.GetParameters().Length; ++i)
+                {
+                    var paramInfo = method.GetParameters()[i];
+                    var paramObj = parameters[i];
+                    var paramRef = methodDef.Parameters[i].ParameterType;
+                    if (paramRef.FullName != paramInfo.ParameterType.FullName)
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched)
+                    allMatched.Add(method);
+            }
+            if (allMatched.Count == 1)
+                return allMatched[0];
+            if (allMatched.Count == 0)
+            {
+                allMatched = allMethods;
+                Logger.Error("ILVM: has multi method can match {0}", methodRef);
+            }
 
+            // fallback
             allMatched.Sort((a, b) =>
             {
                 var paramCnt = a.GetParameters().Length;
@@ -2148,6 +2263,8 @@ namespace ILVM
                 return allMatched[0];
 
             // check param type then
+            allConstructors = allMatched;
+            allMatched = new List<ConstructorInfo>();
             foreach (var constructor in allConstructors)
             {
                 if (constructor.GetParameters().Length != methodDef.Parameters.Count)
@@ -2172,7 +2289,36 @@ namespace ILVM
                 return null;
             if (allMatched.Count == 1)
                 return allMatched[0];
+
+            // check param type name
+            allConstructors = allMatched;
+            allMatched = new List<ConstructorInfo>();
+            foreach (var constructor in allConstructors)
+            {
+                var matched = true;
+                for (var i = 0; i != constructor.GetParameters().Length; ++i)
+                {
+                    var paramInfo = constructor.GetParameters()[i];
+                    var paramObj = parameters[i];
+                    var paramRef = methodRef.Parameters[i].ParameterType;
+                    if (paramRef.FullName != paramInfo.ParameterType.FullName)
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched)
+                    allMatched.Add(constructor);
+            }
+            if (allMatched.Count == 1)
+                return allMatched[0];
+            if (allMatched.Count == 0)
+            {
+                allMatched = allConstructors;
+                Logger.Error("ILVM: has multi method can match {0}", methodRef);
+            }
             
+            // fallback
             allMatched.Sort((a, b) =>
             {
                 var paramCnt = a.GetParameters().Length;
@@ -2285,6 +2431,9 @@ namespace ILVM
 
         private Type GetTypeByName(string typeName)
         {
+            if (genericMap.ContainsKey(typeName))
+                return genericMap[typeName];
+
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 var typeInfo = assembly.GetType(typeName);

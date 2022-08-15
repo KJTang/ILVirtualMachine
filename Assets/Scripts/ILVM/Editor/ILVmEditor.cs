@@ -97,8 +97,11 @@ namespace ILVM
                 }
 
                 var vm = new ILVirtualMachine();
+                var testCounter = 0;
+                var succCounter = 0;
                 foreach (var method in methodToTest)
                 {
+                    testCounter += 1;
                     try
                     {
                         var rfClsInst = Activator.CreateInstance(method.DeclaringType);
@@ -111,12 +114,16 @@ namespace ILVM
                         var parameters = new object[] { vmClsInst };
                         var vmRet = vm.Execute(methodTypeDef, parameters);
                         Logger.Error("#ILVM_Test# {0} \treflection ret: {1} \tvm ret: {2} \tsucc: {3}", method.DeclaringType, rfRet, vmRet, (string)rfRet == (string)vmRet ? "<color=green>succ</color>" :  "<color=red>failed</color>");
+
+                        if ((string)rfRet == (string)vmRet)
+                            succCounter += 1;
                     }
                     catch (Exception e)
                     {
                         Logger.Error("ILVmEditor: exception: {0} \n{1}", method.DeclaringType, e);
                     }
                 }
+                Logger.Error("#ILVM_Test# Tests: total: {0} \tsucc: {1}", testCounter, succCounter);
             }
         }
         
