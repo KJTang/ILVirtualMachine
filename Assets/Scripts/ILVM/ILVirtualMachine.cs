@@ -1846,9 +1846,28 @@ namespace ILVM
                 if (virtualCall)
                    return methodInfo.Invoke(instance, parameters);
 
+                // if method declaring type is current type, just use virtual call
                 var instType = instance?.GetType();
                 if (instType == null || instType == methodInfo.DeclaringType || typeof(System.Type).IsAssignableFrom(instType))
                     return methodInfo.Invoke(instance, parameters);
+
+                // if current type has no method overriden, just use virtual call
+                if (instType != null)
+                {
+                    var bindingFlags = BindingFlags.DeclaredOnly;
+                    if (methodInfo.IsStatic)
+                        bindingFlags |= BindingFlags.Static;
+                    else
+                        bindingFlags |= BindingFlags.Instance;
+                    if (methodInfo.IsPublic)
+                        bindingFlags |= BindingFlags.Public;
+                    else
+                        bindingFlags |= BindingFlags.NonPublic;
+                    var tmpMethod = instType.GetMethod(methodInfo.Name, bindingFlags);
+                    if (tmpMethod == null)
+                        return methodInfo.Invoke(instance, parameters);
+                }
+
             }
 
             // 这里比较麻烦，OpCode 里，Call 直接调用对应的函数地址，Callvirt 会进行多态地调用（即调用 instance 实际类型对应的函数；
