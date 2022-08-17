@@ -40,6 +40,13 @@ namespace ILVMTest {
             // invalid cast
             // ret &= NeedBool((bool)vInt);
             // ret &= NeedInt((int)vBool);
+
+
+            // type cast
+            object obj = (object)vBool;
+            if (obj as List<int> != null)
+                return "invalid";
+            
             
             return "hello";
         }

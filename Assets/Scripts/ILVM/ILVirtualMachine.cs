@@ -719,7 +719,7 @@ namespace ILVM
             var obj = machineStack.Pop();
             var typeRef = il.Operand as TypeReference;
             var typeInfo = GetTypeInfoFromTypeReference(typeRef);
-            if (typeInfo.IsAssignableFrom(obj.GetType()))
+            if (obj != null && typeInfo.IsAssignableFrom(obj.GetType()))
                 machineStack.Push(obj);
             else
                 machineStack.Push(null);
@@ -803,10 +803,10 @@ namespace ILVM
             if (addr != null)
                 objVar = addr.GetObj();
 
-            var curType = objVar.GetType();
+            var curType = objVar?.GetType();
             var tarType = machineVarType[index];
             object result = objVar;
-            if (!tarType.IsAssignableFrom(curType))
+            if (curType != null && !tarType.IsAssignableFrom(curType))
             {
                 if (tarType == typeof(Boolean)) // hack here, handle store int to bool type
                 {
@@ -1716,7 +1716,11 @@ namespace ILVM
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) == (Double)Convert.ChangeType(b, typeof(Double)));
             else
-                return false;
+            {
+                a = (a == null) ? 0 : 1;
+                b = (b == null) ? 0 : 1;
+                result = (int)a == (int)b;
+            }
 
             machineStack.Push(result ? 1 : 0);
             return true;
@@ -1750,7 +1754,11 @@ namespace ILVM
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) > (Double)Convert.ChangeType(b, typeof(Double)));
             else
-                return false;
+            {
+                a = (a == null) ? 0 : 1;
+                b = (b == null) ? 0 : 1;
+                result = (int)a > (int)b;
+            }
 
             machineStack.Push(result ? 1 : 0);
             return true;
@@ -1784,7 +1792,11 @@ namespace ILVM
             else if (val is Double)
                 result = ((Double)Convert.ChangeType(a, typeof(Double)) < (Double)Convert.ChangeType(b, typeof(Double)));
             else
-                return false;
+            {
+                a = (a == null) ? 0 : 1;
+                b = (b == null) ? 0 : 1;
+                result = (int)a < (int)b;
+            }
 
             machineStack.Push(result ? 1 : 0);
             return true;
@@ -2124,7 +2136,7 @@ namespace ILVM
             return true;
         }
 
-        private Type GetTypeInfoFromTypeReference(TypeReference typeRef)
+        private Type GetTypeInfoFromTypeReference(TypeReference typeRef, bool allowGeneric = false)
         {
             if (typeRef.IsGenericParameter && genericMap.ContainsKey(typeRef.Name))
                 return genericMap[typeRef.Name];
@@ -2136,7 +2148,7 @@ namespace ILVM
             if (typeRef.IsArray)
                 typeName = typeName + "[]";
             var typeInfo = GetTypeByName(typeName);
-            if (typeInfo == null || !typeInfo.IsGenericType)
+            if (typeInfo == null || (allowGeneric || !typeInfo.IsGenericType))
                 return typeInfo;
 
             var genericTypeRef = typeRef as GenericInstanceType;
@@ -2364,6 +2376,13 @@ namespace ILVM
             if (typeRef.IsGenericInstance)
             {
                 var genericTypeRef = typeRef as GenericInstanceType;
+                if (genericTypeRef.GenericArguments.Count != needType.GetGenericArguments().Length || genericTypeRef.GenericArguments.Count != objType.GetGenericArguments().Length)
+                    return false;
+
+                var genericTypeInfo = needType.GetGenericTypeDefinition();
+                if (genericTypeInfo == null || !genericTypeInfo.IsAssignableFrom(GetTypeInfoFromTypeReference(genericTypeRef, true)))
+                    return false;
+
                 for (var i = 0; i != genericTypeRef.GenericArguments.Count; ++i)
                 {
                     var needTypeGenericParam = needType.GetGenericArguments()[i];
@@ -2372,7 +2391,7 @@ namespace ILVM
                     if (!IsParameterMatch(needTypeGenericParam, objTypeGenericParam, typeRefGenericParam))
                         return false;
                 }
-                return needType.IsAssignableFrom(objType);
+                return true;
             }
 
             // 非 generic，先检查反射信息和 typeRef 是否匹配
