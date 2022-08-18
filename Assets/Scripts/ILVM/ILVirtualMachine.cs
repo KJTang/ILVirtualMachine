@@ -8,6 +8,7 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 using UnityEngine.Assertions;
+using UnityEngine.Profiling;
 
 namespace ILVM
 {
@@ -678,19 +679,25 @@ namespace ILVM
 
         private bool ExecuteNewobj(MethodReference methodRef)
         {
-            return ExecuteCallConstructor(methodRef, false);
+            Profiler.BeginSample("ILVM: ExecuteNewobj");
+            var ret = ExecuteCallConstructor(methodRef, false);
+            Profiler.EndSample();
+            return ret;
         }
 
         private bool ExecuteNewarr(Type elemType)
         {
+            Profiler.BeginSample("ILVM: ExecuteNewarr");
             var len = (int)machineStack.Pop();
             var arr = Array.CreateInstance(elemType, len);
             machineStack.Push(arr);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteInitobj(Instruction il)
         {
+            Profiler.BeginSample("ILVM: ExecuteInitobj");
             TypeDefinition typeDef;
             Type typeInfo;
             if (il.Operand is TypeReference)
@@ -711,11 +718,13 @@ namespace ILVM
             else
                 obj = null;
             addr.SetObj(obj);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteIsinst(Instruction il)
         {
+            Profiler.BeginSample("ILVM: ExecuteIsinst");
             var obj = machineStack.Pop();
             var typeRef = il.Operand as TypeReference;
             var typeInfo = GetTypeInfoFromTypeReference(typeRef);
@@ -723,49 +732,60 @@ namespace ILVM
                 machineStack.Push(obj);
             else
                 machineStack.Push(null);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLdobj(Instruction il)
         {
+            Profiler.BeginSample("ILVM: ExecuteLdobj");
             var addr = machineStack.Pop() as VMAddr;
             var obj = addr.GetObj();
             machineStack.Push(obj);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteStobj(Instruction il)
         {
+            Profiler.BeginSample("ILVM: ExecuteStobj");
             var obj = machineStack.Pop();
             var addr = machineStack.Pop() as VMAddr;
             addr.SetObj(obj);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoadElem()
         {
+            Profiler.BeginSample("ILVM: ExecuteLoadElem");
             var idx = (int)machineStack.Pop();
             var arr = machineStack.Pop() as Array;
             machineStack.Push(arr.GetValue(idx));
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoadElemAddr()
         {
+            Profiler.BeginSample("ILVM: ExecuteLoadElemAddr");
             var idx = (int)machineStack.Pop();
             var arr = machineStack.Pop() as Array;
             var addr = VMAddrForArray.Create(new VMAddrForArray.VMAddrForArrayData(arr, idx));
             machineStack.Push(addr);
+            Profiler.EndSample();
             return true;
         }
         
         private bool ExecuteLdtoken(Instruction il)
         {
+            Profiler.BeginSample("ILVM: ExecuteLdtoken");
             if (il.Operand is TypeReference)
             {
                 var typeRef = il.Operand as TypeReference;
                 var typeInfo = GetTypeInfoFromTypeReference(typeRef);
                 machineStack.Push(typeInfo.TypeHandle);
+                Profiler.EndSample();
                 return true;
             }
 
@@ -774,30 +794,37 @@ namespace ILVM
                 var typeDef = il.Operand as TypeDefinition;
                 var typeInfo = GetTypeByName(typeDef.FullName);
                 machineStack.Push(typeInfo.TypeHandle);
+                Profiler.EndSample();
                 return true;
             }
 
             Logger.Error("ExecuteLdtoken: not support: {0}", il.Operand);
+            Profiler.EndSample();
             return false;
         }
 
         private bool ExecuteStoreElem()
         {
+            Profiler.BeginSample("ILVM: ExecuteStoreElem");
             var val = machineStack.Pop();
             var idx = (int)machineStack.Pop();
             var arr = machineStack.Pop() as Array;
             arr.SetValue(val, idx);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoad(object value)
         {
+            Profiler.BeginSample("ILVM: ExecuteLoad");
             machineStack.Push(value);
+            Profiler.EndSample();
             return true;
         }
         
         private bool ExecuteStoreLocal(int index)
         {
+            Profiler.BeginSample("ILVM: ExecuteStoreLocal");
             var objVar = machineStack.Pop();
             var addr = objVar as VMAddr;
             if (addr != null)
@@ -825,42 +852,52 @@ namespace ILVM
             if (addr != null)
                 addr.SetObj(result);
             machineVar[index] = result;
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoadLocal(int index)
         {
+            Profiler.BeginSample("ILVM: ExecuteLoadLocal");
             machineStack.Push(machineVar[index]);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoadLocalAddr(int index)
         {
+            Profiler.BeginSample("ILVM: ExecuteLoadLocalAddr");
             var addr = VMAddr.Create(machineVar[index]);
             machineVar[index] = addr;
             machineStack.Push(addr);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoadArg(int index)
         {
+            Profiler.BeginSample("ILVM: ExecuteLoadArg");
             if (arguments == null)
                 machineStack.Push(null);
             else
                 machineStack.Push(arguments[index]);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLoadArgAddr(int index)
         {
+            Profiler.BeginSample("ILVM: ExecuteLoadArgAddr");
             var addr = VMAddr.Create(arguments[index]);
             arguments[index] = addr;
             machineStack.Push(addr);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLdfld(FieldDefinition fieldDef)
         {
+            Profiler.BeginSample("ILVM: ExecuteLdfld");
             var obj = machineStack.Pop();
             var addr = obj as VMAddr;
             if (addr != null)
@@ -880,11 +917,13 @@ namespace ILVM
 
             var val = fieldInfo.GetValue(obj);
             machineStack.Push(val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLdflda(FieldDefinition fieldDef)
         {
+            Profiler.BeginSample("ILVM: ExecuteLdflda");
             var obj = machineStack.Pop();
             var addr = obj as VMAddr;
             if (addr != null)
@@ -904,11 +943,13 @@ namespace ILVM
 
             var fieldAddr = VMAddrForFieldInfo.Create(new VMAddrForFieldInfo.VMAddrForFieldInfoData(fieldInfo, obj));
             machineStack.Push(fieldAddr);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLdsfld(FieldDefinition fieldDef)
         {
+            Profiler.BeginSample("ILVM: ExecuteLdsfld");
             var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
             var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
             FieldInfo fieldInfo = null;
@@ -923,11 +964,13 @@ namespace ILVM
 
             var val = fieldInfo.GetValue(null);
             machineStack.Push(val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLdsflda(FieldDefinition fieldDef)
         {
+            Profiler.BeginSample("ILVM: ExecuteLdsflda");
             var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
             var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
             FieldInfo fieldInfo = null;
@@ -942,11 +985,13 @@ namespace ILVM
 
             var fieldAddr = VMAddrForFieldInfo.Create(new VMAddrForFieldInfo.VMAddrForFieldInfoData(fieldInfo, null));
             machineStack.Push(fieldAddr);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteStfld(FieldDefinition fieldDef)
         {
+            Profiler.BeginSample("ILVM: ExecuteStfld");
             var val = machineStack.Pop();
             var obj = machineStack.Pop();
 
@@ -966,11 +1011,13 @@ namespace ILVM
             if (addr != null)
                 addr.SetObj(obj);
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteStsfld(FieldDefinition fieldDef)
         {
+            Profiler.BeginSample("ILVM: ExecuteStsfld");
             var classType = GetTypeByName(fieldDef.DeclaringType.FullName);
             var fieldInfo = classType.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
             var val = machineStack.Pop();
@@ -979,24 +1026,29 @@ namespace ILVM
             if (fieldInfo.FieldType == typeof(System.Boolean) && val.GetType() == typeof(System.Int32))
                 val = (System.Int32)val == 1;
             fieldInfo.SetValue(null, val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLdind()
         {
+            Profiler.BeginSample("ILVM: ExecuteLdind");
             var addr = machineStack.Pop() as VMAddr;
             Assert.IsNotNull(addr);
             var val = addr.GetObj();
             machineStack.Push(val);
+            Profiler.EndSample();
             return false;
         }
 
         private bool ExecuteStind()
         {
+            Profiler.BeginSample("ILVM: ExecuteStind");
             var val = machineStack.Pop();
             var addr = machineStack.Pop() as VMAddr;
             Assert.IsNotNull(addr);
             addr.SetObj(val);
+            Profiler.EndSample();
             return true;
         }
         
@@ -1022,6 +1074,7 @@ namespace ILVM
 
         private bool ExecuteAdd()
         {
+            Profiler.BeginSample("ILVM: ExecuteAdd");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1047,11 +1100,13 @@ namespace ILVM
             else if (val is Double)
                 machineStack.Push((Double)Convert.ChangeType(a, typeof(Double)) + (Double)Convert.ChangeType(b, typeof(Double)));
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteSub()
         {
+            Profiler.BeginSample("ILVM: ExecuteSub");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1077,11 +1132,13 @@ namespace ILVM
             else if (val is Double)
                 machineStack.Push((Double)Convert.ChangeType(a, typeof(Double)) - (Double)Convert.ChangeType(b, typeof(Double)));
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteMul()
         {
+            Profiler.BeginSample("ILVM: ExecuteMul");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1107,11 +1164,13 @@ namespace ILVM
             else if (val is Double)
                 machineStack.Push((Double)Convert.ChangeType(a, typeof(Double)) * (Double)Convert.ChangeType(b, typeof(Double)));
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteDiv()
         {
+            Profiler.BeginSample("ILVM: ExecuteDiv");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1137,11 +1196,13 @@ namespace ILVM
             else if (val is Double)
                 machineStack.Push((Double)Convert.ChangeType(a, typeof(Double)) / (Double)Convert.ChangeType(b, typeof(Double)));
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteNeg()
         {
+            Profiler.BeginSample("ILVM: ExecuteNeg");
             var val = machineStack.Pop();
             if (val is Byte)
                 machineStack.Push(-(Byte)val);
@@ -1155,11 +1216,13 @@ namespace ILVM
                 machineStack.Push(-(Single)val);
             else if (val is Double)
                 machineStack.Push(-(Double)val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteShl()
         {
+            Profiler.BeginSample("ILVM: ExecuteShl");
             var shl = (Int32)machineStack.Pop();
             var val = machineStack.Pop();
             if (val is Int64)
@@ -1174,11 +1237,13 @@ namespace ILVM
                 tmp = tmp << shl;
                 machineStack.Push(tmp);
             }
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteShr()
         {
+            Profiler.BeginSample("ILVM: ExecuteShr");
             var shl = (Int32)machineStack.Pop();
             var val = machineStack.Pop();
             if (val is Int64)
@@ -1193,11 +1258,13 @@ namespace ILVM
                 tmp = tmp >> shl;
                 machineStack.Push(tmp);
             }
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteShrUn()
         {
+            Profiler.BeginSample("ILVM: ExecuteShrUn");
             var shl = (Int32)machineStack.Pop();
             var val = machineStack.Pop();
             if (val is UInt64)
@@ -1212,11 +1279,13 @@ namespace ILVM
                 tmp = tmp >> shl;
                 machineStack.Push(tmp);
             }
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteAnd()
         {
+            Profiler.BeginSample("ILVM: ExecuteAnd");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
             
@@ -1241,14 +1310,19 @@ namespace ILVM
             else if (val is UInt64)
                 result = ((UInt64)Convert.ChangeType(a, typeof(UInt64)) & (UInt64)Convert.ChangeType(b, typeof(UInt64)));
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             machineStack.Push(result);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteOr()
         {
+            Profiler.BeginSample("ILVM: ExecuteOr");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
             
@@ -1273,14 +1347,19 @@ namespace ILVM
             else if (val is UInt64)
                 result = ((UInt64)Convert.ChangeType(a, typeof(UInt64)) | (UInt64)Convert.ChangeType(b, typeof(UInt64)));
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             machineStack.Push(result);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteXor()
         {
+            Profiler.BeginSample("ILVM: ExecuteXor");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
             
@@ -1305,54 +1384,69 @@ namespace ILVM
             else if (val is UInt64)
                 result = ((UInt64)Convert.ChangeType(a, typeof(UInt64)) ^ (UInt64)Convert.ChangeType(b, typeof(UInt64)));
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             machineStack.Push(result);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteNot()
         {
+            Profiler.BeginSample("ILVM: ExecuteNot");
             var val = (Boolean)machineStack.Pop();
             machineStack.Push(!val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteConv(Type type)
         {
+            Profiler.BeginSample("ILVM: ExecuteConv");
             var val = machineStack.Pop();
             val = Convert.ChangeType(val, type);
             machineStack.Push(val);
+            Profiler.EndSample();
             return true;
         }
         
         private bool ExecuteConvR()
         {
+            Profiler.BeginSample("ILVM: ExecuteConvR");
             var val = machineStack.Pop();
             val = Convert.ChangeType(val, typeof(UInt32));
             machineStack.Push((float)val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteConvR4()
         {
+            Profiler.BeginSample("ILVM: ExecuteConvR4");
             var val = machineStack.Pop();
             val = Convert.ChangeType(val, typeof(float));
             machineStack.Push(val);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteConvR8()
         {
+            Profiler.BeginSample("ILVM: ExecuteConvR8");
             var val = machineStack.Pop();
             val = Convert.ChangeType(val, typeof(double));
             val = Convert.ChangeType(val, typeof(float));
             machineStack.Push(val);
+            Profiler.EndSample();
             return true;
         }
         
         private bool ExecuteBeq(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBeq");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
             
@@ -1385,16 +1479,25 @@ namespace ILVM
             else if (val is Enum)
                 result = (Int32)a == (Int32)b;
             else
+            {
+                Profiler.EndSample();
                 return false;
-
+            }
+            
             if (result)
-                return ExecuteBr(offset);
+            {
+                var ret = ExecuteBr(offset);
+                Profiler.EndSample();
+                return ret;
+            }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteBne(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBne");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
             
@@ -1427,16 +1530,25 @@ namespace ILVM
             else if (val is Enum)
                 result = (Int32)a != (Int32)b;
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             if (result)
-                return ExecuteBr(offset);
+            {
+                var ret = ExecuteBr(offset);
+                Profiler.EndSample();
+                return ret;
+            }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteBge(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBge");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1467,16 +1579,25 @@ namespace ILVM
             else if (val is Enum)
                 result = (Int32)a >= (Int32)b;
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             if (result)
-                return ExecuteBr(offset);
+            {
+                var ret = ExecuteBr(offset);
+                Profiler.EndSample();
+                return ret;
+            }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteBgt(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBgt");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1507,16 +1628,25 @@ namespace ILVM
             else if (val is Enum)
                 result = (Int32)a > (Int32)b;
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             if (result)
-                return ExecuteBr(offset);
+            {
+                var ret = ExecuteBr(offset);
+                Profiler.EndSample();
+                return ret;
+            }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteBle(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBle");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1547,16 +1677,25 @@ namespace ILVM
             else if (val is Enum)
                 result = (Int32)a <= (Int32)b;
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             if (result)
-                return ExecuteBr(offset);
+            {
+                var ret = ExecuteBr(offset);
+                Profiler.EndSample();
+                return ret;
+            }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteBlt(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBlt");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1587,11 +1726,19 @@ namespace ILVM
             else if (val is Enum)
                 result = (Int32)a < (Int32)b;
             else
+            {
+                Profiler.EndSample();
                 return false;
+            }
 
             if (result)
-                return ExecuteBr(offset);
+            {
+                var ret = ExecuteBr(offset);
+                Profiler.EndSample();
+                return ret;
+            }
 
+            Profiler.EndSample();
             return true;
         }
         
@@ -1676,20 +1823,25 @@ namespace ILVM
 
         private bool ExecuteBr(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteBr");
             var idx = offset2idx[offset];
             SetEBP(idx);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteLeave(int offset)
         {
+            Profiler.BeginSample("ILVM: ExecuteLeave");
             var idx = offset2idx[offset];
             SetEBP(idx);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteCeq()
         {
+            Profiler.BeginSample("ILVM: ExecuteCeq");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
             
@@ -1723,11 +1875,13 @@ namespace ILVM
             }
 
             machineStack.Push(result ? 1 : 0);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteCgt()
         {
+            Profiler.BeginSample("ILVM: ExecuteCgt");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1761,11 +1915,13 @@ namespace ILVM
             }
 
             machineStack.Push(result ? 1 : 0);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteClt()
         {
+            Profiler.BeginSample("ILVM: ExecuteClt");
             var b = machineStack.Pop();
             var a = machineStack.Pop();
 
@@ -1799,11 +1955,14 @@ namespace ILVM
             }
 
             machineStack.Push(result ? 1 : 0);
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteConstrained(TypeDefinition typeDef)
         { 
+            Profiler.BeginSample("ILVM: ExecuteConstrained");
+            Profiler.EndSample();
             // currently do nothing.
             return true;
         }
@@ -1930,6 +2089,7 @@ namespace ILVM
             if (methodDef.IsConstructor)
                 return ExecuteCallConstructor(methodRef, true);
 
+            Profiler.BeginSample("ILVM: ExecuteCall");
             object[] parameters = null;
             VMAddr[] paramAddrs = null;
             if (methodRef.HasParameters)
@@ -1953,6 +2113,7 @@ namespace ILVM
             if (methodInfo == null)
             {
                 Logger.Error("ILRunner: Call: cannot find method: {0}", methodRef.FullName);
+                Profiler.EndSample();
                 return false;
             }
 
@@ -1987,6 +2148,7 @@ namespace ILVM
             catch (Exception e)
             {
                 Logger.Error("ILRunner: Call: invoke method failed: {0}, \n{1}", methodRef.FullName, e);
+                Profiler.EndSample();
                 return false;
             }
 
@@ -2007,21 +2169,27 @@ namespace ILVM
                 }
             }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteCallvirt(MethodReference methodRef)
         {
-            return ExecuteCall(methodRef, true);
+            Profiler.BeginSample("ILVM: ExecuteCallvirt");
+            var ret = ExecuteCall(methodRef, true);
+            Profiler.EndSample();
+            return ret;
         }
 
         private bool ExecuteCallProp(MethodReference methodRef)
         {
+            Profiler.BeginSample("ILVM: ExecuteCallProp");
             var methodDef = methodRef.Resolve();
             var propInfo = GetPropInfoFromMethodReference(methodRef);
             if (propInfo == null)
             {
                 Logger.Error("ILRunner: CallProp: cannot find prop: {0}", methodRef.FullName);
+                Profiler.EndSample();
                 return false;
             }
 
@@ -2086,11 +2254,13 @@ namespace ILVM
                 }
             }
 
+            Profiler.EndSample();
             return true;
         }
 
         private bool ExecuteCallConstructor(MethodReference methodRef, bool hasAddrOnStack)
         {
+            Profiler.BeginSample("ILVM: ExecuteCallConstructor");
             object[] parameters = null;
             VMAddr[] paramAddrs = null;
             if (methodRef.HasParameters)
@@ -2133,13 +2303,28 @@ namespace ILVM
                 }
             }
 
+            Profiler.EndSample();
             return true;
         }
+
+        private static Dictionary<TypeReference, Type> typeCache = new Dictionary<TypeReference, Type>(1024);
+
 
         private Type GetTypeInfoFromTypeReference(TypeReference typeRef, bool allowGeneric = false)
         {
             if (typeRef.IsGenericParameter && genericMap.ContainsKey(typeRef.Name))
                 return genericMap[typeRef.Name];
+            
+            Profiler.BeginSample("ILVM: GetTypeInfoFromTypeReference: all");
+            Type typeInfo = ILVmManager.GetVMTypeInfo(typeRef);
+            if (typeInfo != null)
+            {
+                Profiler.EndSample();
+                return typeInfo;
+            }
+            Profiler.EndSample();
+
+            Profiler.BeginSample("ILVM: GetTypeInfoFromTypeReference: new");
             var typeDef = typeRef.Resolve();
             var typeName = typeDef.FullName;
             
@@ -2147,9 +2332,13 @@ namespace ILVM
                 typeName = typeName + "*";
             if (typeRef.IsArray)
                 typeName = typeName + "[]";
-            var typeInfo = GetTypeByName(typeName);
+            typeInfo = GetTypeByName(typeName);
             if (typeInfo == null || (allowGeneric || !typeInfo.IsGenericType))
+            {
+                ILVmManager.SetVMTypeInfo(typeRef, typeInfo);
+                Profiler.EndSample();
                 return typeInfo;
+            }
 
             var genericTypeRef = typeRef as GenericInstanceType;
             var parameterTypes = new Type[genericTypeRef.GenericArguments.Count];
@@ -2160,213 +2349,288 @@ namespace ILVM
                 parameterTypes[i] = genericType;
             }
             typeInfo = typeInfo.MakeGenericType(parameterTypes);
+            ILVmManager.SetVMTypeInfo(typeRef, typeInfo);
+            Profiler.EndSample();
             return typeInfo;
         }
 
         private MethodInfo GetMethodInfoFromMethodReference(MethodReference methodRef, object[] parameters)
         {
+            Profiler.BeginSample("ILVM: GetMethodInfoFromMethodReference: all");
+            MethodInfo methodInfo = ILVmManager.GetVMMethodInfo(methodRef);
+            if (methodInfo != null)
+            {
+                Profiler.EndSample();
+                return methodInfo;
+            }
+            Profiler.EndSample();
+
+            Profiler.BeginSample("ILVM: GetMethodInfoFromMethodReference: new");
             var classRef = methodRef.DeclaringType;
             var classInfo = GetTypeInfoFromTypeReference(classRef);
             if (classInfo == null)
+            {
+                ILVmManager.SetVMMethodInfo(methodRef, null);
+                Profiler.EndSample();
                 return null;
+            }
 
-            MethodInfo methodInfo = null;
             var methodDef = methodRef.Resolve();
             if (methodDef.IsConstructor)
+            {
+                ILVmManager.SetVMMethodInfo(methodRef, null);
+                Profiler.EndSample();
                 return null;
-
-            var allMethods = new List<MethodInfo>(classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static));
-            var allMatched = new List<MethodInfo>();
-
-            // check name & param cnt first
-            foreach (var method in allMethods)
-            {
-                if (method.Name != methodDef.Name)
-                    continue;
-                if (method.GetParameters().Length != methodDef.Parameters.Count)
-                    continue;
-                allMatched.Add(method);
-            }
-            if (allMatched.Count == 0)
-                return null;
-            if (allMatched.Count == 1)
-                return allMatched[0];
-            
-            // check param type then
-            allMethods = allMatched;
-            allMatched = new List<MethodInfo>();
-            foreach (var method in allMethods)
-            {
-                var matched = true;
-                for (var i = 0; i != method.GetParameters().Length; ++i)
-                {
-                    var paramInfo = method.GetParameters()[i];
-                    var paramObj = parameters[i];
-                    var paramRef = methodDef.Parameters[i].ParameterType;
-                    if (!IsParameterMatch(paramInfo.ParameterType, paramObj?.GetType(), paramRef))
-                    {
-                        matched = false;
-                        break;
-                    }
-                }
-                if (matched)
-                    allMatched.Add(method);
-            }
-            if (allMatched.Count == 0)
-                return null;
-            if (allMatched.Count == 1)
-                return allMatched[0];
-            
-            // check param type name
-            allMethods = allMatched;
-            allMatched = new List<MethodInfo>();
-            foreach (var method in allMethods)
-            {
-                var matched = true;
-                for (var i = 0; i != method.GetParameters().Length; ++i)
-                {
-                    var paramInfo = method.GetParameters()[i];
-                    var paramObj = parameters[i];
-                    var paramRef = methodDef.Parameters[i].ParameterType;
-                    if (paramRef.FullName != paramInfo.ParameterType.FullName)
-                    {
-                        matched = false;
-                        break;
-                    }
-                }
-                if (matched)
-                    allMatched.Add(method);
-            }
-            if (allMatched.Count == 1)
-                return allMatched[0];
-            if (allMatched.Count == 0)
-            {
-                allMatched = allMethods;
-                Logger.Error("ILVM: has multi method can match {0}", methodRef);
             }
 
-            // fallback
-            allMatched.Sort((a, b) =>
+            do
             {
-                var paramCnt = a.GetParameters().Length;
-                for (var i = 0; i != paramCnt; ++i)
+                var allMethods = new List<MethodInfo>(classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static));
+                var allMatched = new List<MethodInfo>();
+
+                // check name & param cnt first
+                foreach (var method in allMethods)
                 {
-                    var aParam = a.GetParameters()[i];
-                    var bParam = b.GetParameters()[i];
-                    if (aParam.ParameterType == bParam.ParameterType)
+                    if (method.Name != methodDef.Name)
                         continue;
-
-                    if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
-                        return 1;
-                    return -1;
+                    if (method.GetParameters().Length != methodDef.Parameters.Count)
+                        continue;
+                    allMatched.Add(method);
                 }
-                return 0;
-            });
-            methodInfo = allMatched[0];
+                if (allMatched.Count == 0)
+                {
+                    break;
+                }
+                if (allMatched.Count == 1)
+                {
+                    methodInfo = allMatched[0];
+                    break;
+                }
+            
+                // check param type then
+                allMethods = allMatched;
+                allMatched = new List<MethodInfo>();
+                foreach (var method in allMethods)
+                {
+                    var matched = true;
+                    for (var i = 0; i != method.GetParameters().Length; ++i)
+                    {
+                        var paramInfo = method.GetParameters()[i];
+                        var paramObj = parameters[i];
+                        var paramRef = methodDef.Parameters[i].ParameterType;
+                        if (!IsParameterMatch(paramInfo.ParameterType, paramObj?.GetType(), paramRef))
+                        {
+                            matched = false;
+                            break;
+                        }
+                    }
+                    if (matched)
+                        allMatched.Add(method);
+                }
+                if (allMatched.Count == 0)
+                {
+                    break;
+                }
+                if (allMatched.Count == 1)
+                {
+                    methodInfo = allMatched[0];
+                    break;
+                }
+            
+                // check param type name
+                allMethods = allMatched;
+                allMatched = new List<MethodInfo>();
+                foreach (var method in allMethods)
+                {
+                    var matched = true;
+                    for (var i = 0; i != method.GetParameters().Length; ++i)
+                    {
+                        var paramInfo = method.GetParameters()[i];
+                        var paramObj = parameters[i];
+                        var paramRef = methodDef.Parameters[i].ParameterType;
+                        if (paramRef.FullName != paramInfo.ParameterType.FullName)
+                        {
+                            matched = false;
+                            break;
+                        }
+                    }
+                    if (matched)
+                        allMatched.Add(method);
+                }
+                if (allMatched.Count == 1)
+                {
+                    methodInfo = allMatched[0];
+                    break;
+                }
+                if (allMatched.Count == 0)
+                {
+                    allMatched = allMethods;
+                    Logger.Error("ILVM: has multi method can match {0}", methodRef);
+                }
+
+                // fallback
+                allMatched.Sort((a, b) =>
+                {
+                    var paramCnt = a.GetParameters().Length;
+                    for (var i = 0; i != paramCnt; ++i)
+                    {
+                        var aParam = a.GetParameters()[i];
+                        var bParam = b.GetParameters()[i];
+                        if (aParam.ParameterType == bParam.ParameterType)
+                            continue;
+
+                        if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
+                            return 1;
+                        return -1;
+                    }
+                    return 0;
+                });
+                methodInfo = allMatched[0];
+                break;
+            }
+            while (false);
+
+            ILVmManager.SetVMMethodInfo(methodRef, methodInfo);
+            Profiler.EndSample();
             return methodInfo;
         }
 
         private ConstructorInfo GetConstructorFromMethodReference(MethodReference methodRef, object[] parameters)
         {
+            Profiler.BeginSample("ILVM: GetConstructorFromMethodReference: all");
+            ConstructorInfo constructorInfo = ILVmManager.GetVMConstructorInfo(methodRef);
+            if (constructorInfo != null)
+            {
+                Profiler.EndSample();
+                return constructorInfo;
+            }
+            Profiler.EndSample();
+            
+            Profiler.BeginSample("ILVM: GetConstructorFromMethodReference: new");
             var classRef = methodRef.DeclaringType;
             var classInfo = GetTypeInfoFromTypeReference(classRef);
             if (classInfo == null)
+            {
+                Profiler.EndSample();
                 return null;
+            }
 
-            ConstructorInfo constructorInfo = null;
             var methodDef = methodRef.Resolve();
             if (!methodDef.IsConstructor)
+            {
+                Profiler.EndSample();
                 return null;
-            
-            var allConstructors = new List<ConstructorInfo>(classInfo.GetConstructors());
-            var allMatched = new List<ConstructorInfo>();
-
-            // check name & param cnt first
-            foreach (var constructor in allConstructors)
-            {
-                if (constructor.GetParameters().Length != methodDef.Parameters.Count)
-                    continue;
-                allMatched.Add(constructor);
-            }
-            if (allMatched.Count == 0)
-                return null;
-            if (allMatched.Count == 1)
-                return allMatched[0];
-
-            // check param type then
-            allConstructors = allMatched;
-            allMatched = new List<ConstructorInfo>();
-            foreach (var constructor in allConstructors)
-            {
-                if (constructor.GetParameters().Length != methodDef.Parameters.Count)
-                    continue;
-
-                var matched = true;
-                for (var i = 0; i != constructor.GetParameters().Length; ++i)
-                {
-                    var paramInfo = constructor.GetParameters()[i];
-                    var paramObj = parameters[i];
-                    var paramRef = methodRef.Parameters[i].ParameterType;
-                    if (!IsParameterMatch(paramInfo.ParameterType, paramObj?.GetType(), paramRef))
-                    {
-                        matched = false;
-                        break;
-                    }
-                }
-                if (matched)
-                    allMatched.Add(constructor);
-            }
-            if (allMatched.Count == 0)
-                return null;
-            if (allMatched.Count == 1)
-                return allMatched[0];
-
-            // check param type name
-            allConstructors = allMatched;
-            allMatched = new List<ConstructorInfo>();
-            foreach (var constructor in allConstructors)
-            {
-                var matched = true;
-                for (var i = 0; i != constructor.GetParameters().Length; ++i)
-                {
-                    var paramInfo = constructor.GetParameters()[i];
-                    var paramObj = parameters[i];
-                    var paramRef = methodRef.Parameters[i].ParameterType;
-                    if (paramRef.FullName != paramInfo.ParameterType.FullName)
-                    {
-                        matched = false;
-                        break;
-                    }
-                }
-                if (matched)
-                    allMatched.Add(constructor);
-            }
-            if (allMatched.Count == 1)
-                return allMatched[0];
-            if (allMatched.Count == 0)
-            {
-                allMatched = allConstructors;
-                Logger.Error("ILVM: has multi method can match {0}", methodRef);
             }
             
-            // fallback
-            allMatched.Sort((a, b) =>
+            do
             {
-                var paramCnt = a.GetParameters().Length;
-                for (var i = 0; i != paramCnt; ++i)
+                var allConstructors = new List<ConstructorInfo>(classInfo.GetConstructors());
+                var allMatched = new List<ConstructorInfo>();
+
+                // check name & param cnt first
+                foreach (var constructor in allConstructors)
                 {
-                    var aParam = a.GetParameters()[i];
-                    var bParam = b.GetParameters()[i];
-                    if (aParam.ParameterType == bParam.ParameterType)
+                    if (constructor.GetParameters().Length != methodDef.Parameters.Count)
+                        continue;
+                    allMatched.Add(constructor);
+                }
+                if (allMatched.Count == 0)
+                {
+                    break;
+                }
+                if (allMatched.Count == 1)
+                {
+                    constructorInfo = allMatched[0];
+                    break;
+                }
+
+                // check param type then
+                allConstructors = allMatched;
+                allMatched = new List<ConstructorInfo>();
+                foreach (var constructor in allConstructors)
+                {
+                    if (constructor.GetParameters().Length != methodDef.Parameters.Count)
                         continue;
 
-                    if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
-                        return 1;
-                    return -1;
+                    var matched = true;
+                    for (var i = 0; i != constructor.GetParameters().Length; ++i)
+                    {
+                        var paramInfo = constructor.GetParameters()[i];
+                        var paramObj = parameters[i];
+                        var paramRef = methodRef.Parameters[i].ParameterType;
+                        if (!IsParameterMatch(paramInfo.ParameterType, paramObj?.GetType(), paramRef))
+                        {
+                            matched = false;
+                            break;
+                        }
+                    }
+                    if (matched)
+                        allMatched.Add(constructor);
                 }
-                return 0;
-            });
-            constructorInfo = allMatched[0];
+                if (allMatched.Count == 0)
+                {
+                    break;
+                }
+                if (allMatched.Count == 1)
+                {
+                    constructorInfo = allMatched[0];
+                    break;
+                }
+
+                // check param type name
+                allConstructors = allMatched;
+                allMatched = new List<ConstructorInfo>();
+                foreach (var constructor in allConstructors)
+                {
+                    var matched = true;
+                    for (var i = 0; i != constructor.GetParameters().Length; ++i)
+                    {
+                        var paramInfo = constructor.GetParameters()[i];
+                        var paramObj = parameters[i];
+                        var paramRef = methodRef.Parameters[i].ParameterType;
+                        if (paramRef.FullName != paramInfo.ParameterType.FullName)
+                        {
+                            matched = false;
+                            break;
+                        }
+                    }
+                    if (matched)
+                        allMatched.Add(constructor);
+                }
+                if (allMatched.Count == 1)
+                {
+                    constructorInfo = allMatched[0];
+                    break;
+                }
+                if (allMatched.Count == 0)
+                {
+                    allMatched = allConstructors;
+                    Logger.Error("ILVM: has multi method can match {0}", methodRef);
+                }
+            
+                // fallback
+                allMatched.Sort((a, b) =>
+                {
+                    var paramCnt = a.GetParameters().Length;
+                    for (var i = 0; i != paramCnt; ++i)
+                    {
+                        var aParam = a.GetParameters()[i];
+                        var bParam = b.GetParameters()[i];
+                        if (aParam.ParameterType == bParam.ParameterType)
+                            continue;
+
+                        if (aParam.ParameterType.IsAssignableFrom(bParam.ParameterType))
+                            return 1;
+                        return -1;
+                    }
+                    return 0;
+                });
+                constructorInfo = allMatched[0];
+            }
+            while (false);
+
+            ILVmManager.SetVMConstructorInfo(methodRef, constructorInfo);
+            Profiler.EndSample();
             return constructorInfo;
         }
 
@@ -2457,13 +2721,18 @@ namespace ILVM
 
         private PropertyInfo GetPropInfoFromMethodReference(MethodReference methodRef)
         {
+            PropertyInfo propInfo = ILVmManager.GetVMPropertyInfo(methodRef);
+            if (propInfo != null)
+                return propInfo;
+
             var classRef = methodRef.DeclaringType;
             var classInfo = GetTypeInfoFromTypeReference(classRef);
             if (classInfo == null)
                 return null;
 
             var propName = methodRef.Name.Substring("set_".Length);
-            var propInfo = classInfo.GetProperty(propName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            propInfo = classInfo.GetProperty(propName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            ILVmManager.SetVMPropertyInfo(methodRef, propInfo);
             return propInfo;
         }
 
@@ -2472,18 +2741,29 @@ namespace ILVM
             if (genericMap.ContainsKey(typeName))
                 return genericMap[typeName];
 
+            Type typeInfo = ILVmManager.GetVMTypeInfoByName(typeName);
+            if (typeInfo != null)
+                return typeInfo;
+
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                var typeInfo = assembly.GetType(typeName);
-                if (typeInfo != null)
-                    return typeInfo;
+                var t = assembly.GetType(typeName);
+                if (t != null)
+                {
+                    typeInfo = t;
+                    break;
+                }
             }
-            return null;
+
+            ILVmManager.SetVMTypeInfoByName(typeName, typeInfo);
+            return typeInfo;
         }
 
         private bool ExecuteFailed(Instruction il)
         {
+            Profiler.BeginSample("ILVM: ExecuteFailed");
             Logger.Error("ILRunner: this opcode not supported yet: {0}", il.ToString());
+            Profiler.EndSample();
             return false;
         }
     }

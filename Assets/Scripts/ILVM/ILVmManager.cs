@@ -320,6 +320,7 @@ namespace ILVM
             return path;
         }
 
+        #region method id
         private static Dictionary<int, MethodDefinition> methodId2methodDef = new Dictionary<int, MethodDefinition>(8196);
         private static Dictionary<MethodDefinition, int> methodDef2methodId = new Dictionary<MethodDefinition, int>(8196);
         public static void ClearMethodId()
@@ -499,8 +500,10 @@ namespace ILVM
                 return -1;
             return methodId;
         }
+        #endregion
 
 
+        #region method info wrap
         public struct MethodInfoWrap
         {
             public MethodDefinition methodDef;
@@ -578,5 +581,142 @@ namespace ILVM
             VMPool.BackToPool(vm);
             return ret;
         }
+
+        #endregion
+
+
+        #region VM: mono Type to reflection Type 
+
+        private static Dictionary<TypeReference, Type> cacheTypeRefToTypeInfo = new Dictionary<TypeReference, Type>(1024);
+
+        public static Type GetVMTypeInfo(TypeReference typeRef)
+        {
+            if (typeRef == null)
+                return null;
+
+            Type typeInfo;
+            cacheTypeRefToTypeInfo.TryGetValue(typeRef, out typeInfo);
+            return typeInfo;
+        }
+
+        public static void SetVMTypeInfo(TypeReference typeRef, Type typeInfo)
+        {
+            if (cacheTypeRefToTypeInfo.ContainsKey(typeRef))
+                cacheTypeRefToTypeInfo[typeRef] = typeInfo;
+            else
+                cacheTypeRefToTypeInfo.Add(typeRef, typeInfo);
+        }
+
+        public static void ClearVMTypeInfo()
+        {
+            cacheTypeRefToTypeInfo.Clear();
+        }
+
+        
+        private static Dictionary<MethodReference, MethodInfo> cacheMethodRefToMethodInfo = new Dictionary<MethodReference, MethodInfo>(1024);
+
+        public static MethodInfo GetVMMethodInfo(MethodReference methodRef)
+        {
+            if (methodRef == null)
+                return null;
+
+            MethodInfo methodInfo;
+            cacheMethodRefToMethodInfo.TryGetValue(methodRef, out methodInfo);
+            return methodInfo;
+        }
+
+        public static void SetVMMethodInfo(MethodReference methodRef, MethodInfo methodInfo)
+        {
+            if (cacheMethodRefToMethodInfo.ContainsKey(methodRef))
+                cacheMethodRefToMethodInfo[methodRef] = methodInfo;
+            else
+                cacheMethodRefToMethodInfo.Add(methodRef, methodInfo);
+        }
+
+        public static void ClearVMMethodInfo()
+        {
+            cacheMethodRefToMethodInfo.Clear();
+        }
+
+        
+        private static Dictionary<MethodReference, ConstructorInfo> cacheMethodRefToConstructorInfo = new Dictionary<MethodReference, ConstructorInfo>(1024);
+
+        public static ConstructorInfo GetVMConstructorInfo(MethodReference methodRef)
+        {
+            if (methodRef == null)
+                return null;
+
+            ConstructorInfo constructorInfo;
+            cacheMethodRefToConstructorInfo.TryGetValue(methodRef, out constructorInfo);
+            return constructorInfo;
+        }
+
+        public static void SetVMConstructorInfo(MethodReference methodRef, ConstructorInfo constructorInfo)
+        {
+            if (cacheMethodRefToConstructorInfo.ContainsKey(methodRef))
+                cacheMethodRefToConstructorInfo[methodRef] = constructorInfo;
+            else
+                cacheMethodRefToConstructorInfo.Add(methodRef, constructorInfo);
+        }
+
+        public static void ClearVMConstructorInfo()
+        {
+            cacheMethodRefToConstructorInfo.Clear();
+        }
+
+        
+        private static Dictionary<MethodReference, PropertyInfo> cacheMethodRefToPropertyInfo = new Dictionary<MethodReference, PropertyInfo>(1024);
+
+        public static PropertyInfo GetVMPropertyInfo(MethodReference methodRef)
+        {
+            if (methodRef == null)
+                return null;
+
+            PropertyInfo propInfo;
+            cacheMethodRefToPropertyInfo.TryGetValue(methodRef, out propInfo);
+            return propInfo;
+        }
+
+        public static void SetVMPropertyInfo(MethodReference methodRef, PropertyInfo propInfo)
+        {
+            if (cacheMethodRefToPropertyInfo.ContainsKey(methodRef))
+                cacheMethodRefToPropertyInfo[methodRef] = propInfo;
+            else
+                cacheMethodRefToPropertyInfo.Add(methodRef, propInfo);
+        }
+
+        public static void ClearVMPropertyInfo()
+        {
+            cacheMethodRefToPropertyInfo.Clear();
+        }
+
+
+        
+        private static Dictionary<string, Type> cacheNameToTypeInfo = new Dictionary<string, Type>(1024);
+
+        public static Type GetVMTypeInfoByName(string fullName)
+        {
+            if (string.IsNullOrEmpty(fullName))
+                return null;
+
+            Type typeInfo;
+            cacheNameToTypeInfo.TryGetValue(fullName, out typeInfo);
+            return typeInfo;
+        }
+
+        public static void SetVMTypeInfoByName(string fullName, Type typeInfo)
+        {
+            if (cacheNameToTypeInfo.ContainsKey(fullName))
+                cacheNameToTypeInfo[fullName] = typeInfo;
+            else
+                cacheNameToTypeInfo.Add(fullName, typeInfo);
+        }
+
+        public static void ClearVMTypeInfoByName()
+        {
+            cacheNameToTypeInfo.Clear();
+        }
+
+        #endregion
     }
 }

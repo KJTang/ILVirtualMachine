@@ -97,6 +97,11 @@ namespace ILVM
         public static void ClearHotfix()
         {
             ILVmManager.ClearMethodInfo();
+            ILVmManager.ClearVMTypeInfo();
+            ILVmManager.ClearVMMethodInfo();
+            ILVmManager.ClearVMConstructorInfo();
+            ILVmManager.ClearVMPropertyInfo();
+            ILVmManager.ClearVMTypeInfoByName();
             ILVM.VMAddr.Clear();
             if (currentAssembly != null)
                 currentAssembly.Dispose();

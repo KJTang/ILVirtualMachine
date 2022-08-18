@@ -43,7 +43,7 @@ namespace ILVM
             return string.Format("VMAddr({0}): {1}", addrIdx, obj);
         }
 
-        protected static Dictionary<ulong, VMAddr> addrDict = new Dictionary<ulong, VMAddr>();
+        protected static Dictionary<ulong, VMAddr> addrDict = new Dictionary<ulong, VMAddr>(1024);
         protected static ulong addrIndexer = 0;
 
         public static VMAddr Create(object o)
