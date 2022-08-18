@@ -2307,9 +2307,6 @@ namespace ILVM
             return true;
         }
 
-        private static Dictionary<TypeReference, Type> typeCache = new Dictionary<TypeReference, Type>(1024);
-
-
         private Type GetTypeInfoFromTypeReference(TypeReference typeRef, bool allowGeneric = false)
         {
             if (typeRef.IsGenericParameter && genericMap.ContainsKey(typeRef.Name))
