@@ -16,9 +16,7 @@ namespace ILVM
 
         public static void Hotfix()
         {
-            if (currentAssembly != null)
-                currentAssembly.Dispose();
-            currentAssembly = null;
+            ClearHotfix();
             
             var debugPath = Application.dataPath.Replace("/Assets", "/Library/ILVM/Assembly-CSharp.dll");
             var assemblyHandle = new AssemblyHandle(debugPath);
@@ -32,8 +30,6 @@ namespace ILVM
                     return;
                 }
                 ILVmManager.LoadMethodIdFromFile(assemblyHandle);
-                ILVmManager.ClearMethodInfo();
-                ILVM.VMAddr.Clear();
 
                 var timer = new DebugTimer();
                 timer.Start("Print MethodId");
@@ -101,6 +97,7 @@ namespace ILVM
             ILVmManager.ClearVMMethodInfo();
             ILVmManager.ClearVMConstructorInfo();
             ILVmManager.ClearVMPropertyInfo();
+            ILVmManager.ClearVMFieldInfo();
             ILVmManager.ClearVMTypeInfoByName();
             ILVM.VMAddr.Clear();
             if (currentAssembly != null)

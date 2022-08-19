@@ -135,15 +135,18 @@ namespace ILVM
             var ilLst = mtd.Body.Instructions;
 
             // Print all IL
-            var sb = new System.Text.StringBuilder();
-            sb.AppendFormat("============================ execute new: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, ilLst.Count);
-            sb.AppendLine();
-            foreach (var il in ilLst)
+            if (Logger.EnableLog)
             {
-                sb.AppendFormat("IL: {0}", il.ToString());
+                var sb = new System.Text.StringBuilder();
+                sb.AppendFormat("============================ execute new: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, ilLst.Count);
                 sb.AppendLine();
+                foreach (var il in ilLst)
+                {
+                    sb.AppendFormat("IL: {0}", il.ToString());
+                    sb.AppendLine();
+                }
+                Logger.Log(sb.ToString());
             }
-            Logger.Log(sb.ToString());
 
             methodDef = mtd;
             methodInfo = mti;
@@ -169,14 +172,14 @@ namespace ILVM
                 var il = ilLst[ebp];
                 SetEBP(ebp + 1);
 
-                Logger.Log("Exe IL: {0}", il);
+                if (Logger.EnableLog) Logger.Log("Exe IL: {0}", il);
                 if (!ExecuteIL(il))
                 {
                     Logger.Error("ILRunner: execute il failed, {0}", il);
                     succ = false;
                     break;
                 }
-                Logger.Log("{0}", machineStack.ToString());
+                if (Logger.EnableLog) Logger.Log("{0}", machineStack.ToString());
 
                 if (il.Next == null)
                     break;
@@ -186,7 +189,7 @@ namespace ILVM
             if (methodDef.ReturnType.FullName != "System.Void" && succ && machineStack.Count > 0)
                 ret = machineStack.Pop();
 
-            Logger.Log("============================ execute finished: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, succ);
+            if (Logger.EnableLog) Logger.Log("============================ execute finished: {0}.{1} \t{2}", (args != null && args[0] != null) ? args[0].GetType().ToString() : "null", mtd, succ);
             Reset();
 
             return ret;
@@ -451,37 +454,37 @@ namespace ILVM
                     var ldfldFieldDef = il.Operand as FieldDefinition;
                     if (ldfldFieldDef == null)
                         ldfldFieldDef = (il.Operand as FieldReference)?.Resolve();
-                    Assert.IsNotNull(ldfldFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    //Assert.IsNotNull(ldfldFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteLdfld(ldfldFieldDef);
                 case Code.Ldflda:
                     var ldfldaFieldDef = il.Operand as FieldDefinition;
                     if (ldfldaFieldDef == null)
                         ldfldaFieldDef = (il.Operand as FieldReference)?.Resolve();
-                    Assert.IsNotNull(ldfldaFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    //Assert.IsNotNull(ldfldaFieldDef, string.Format("Ldfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteLdflda(ldfldaFieldDef);
                 case Code.Ldsfld:
                     var ldsfldFieldDef = il.Operand as FieldDefinition;
                     if (ldsfldFieldDef == null)
                         ldsfldFieldDef = (il.Operand as FieldReference)?.Resolve();
-                    Assert.IsNotNull(ldsfldFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    //Assert.IsNotNull(ldsfldFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteLdsfld(ldsfldFieldDef);
                 case Code.Ldsflda:
                     var ldsfldaFieldDef = il.Operand as FieldDefinition;
                     if (ldsfldaFieldDef == null)
                         ldsfldaFieldDef = (il.Operand as FieldReference)?.Resolve();
-                    Assert.IsNotNull(ldsfldaFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    //Assert.IsNotNull(ldsfldaFieldDef, string.Format("Ldsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteLdsflda(ldsfldaFieldDef);
                 case Code.Stfld:
                     var stfldFieldDef = il.Operand as FieldDefinition;
                     if (stfldFieldDef == null)
                         stfldFieldDef = (il.Operand as FieldReference)?.Resolve();
-                    Assert.IsNotNull(stfldFieldDef, string.Format("Stfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    //Assert.IsNotNull(stfldFieldDef, string.Format("Stfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteStfld(stfldFieldDef);
                 case Code.Stsfld:
                     var stsfldFieldDef = il.Operand as FieldDefinition;
                     if (stsfldFieldDef == null)
                         stsfldFieldDef = (il.Operand as FieldReference)?.Resolve();
-                    Assert.IsNotNull(stsfldFieldDef, string.Format("Stsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
+                    //Assert.IsNotNull(stsfldFieldDef, string.Format("Stsfld: invald il: {0} \t{1}", il.ToString(), il.Operand.GetType()));
                     return ExecuteStsfld(stsfldFieldDef);
 
                 case Code.Ldind_I:
@@ -895,6 +898,7 @@ namespace ILVM
             return true;
         }
 
+
         private bool ExecuteLdfld(FieldDefinition fieldDef)
         {
             Profiler.BeginSample("ILVM: ExecuteLdfld");
@@ -902,19 +906,7 @@ namespace ILVM
             var addr = obj as VMAddr;
             if (addr != null)
                 obj = addr.GetObj();
-
-            var typeInfo = obj.GetType();
-            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-            FieldInfo fieldInfo = null;
-            while (typeInfo != null)
-            {
-                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
-                if (fieldInfo != null)
-                    break;
-                typeInfo = typeInfo.BaseType;
-            }
-            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, obj.GetType()));
-
+            var fieldInfo = GetFieldInfoByFieldDefinition(fieldDef);
             var val = fieldInfo.GetValue(obj);
             machineStack.Push(val);
             Profiler.EndSample();
@@ -928,19 +920,7 @@ namespace ILVM
             var addr = obj as VMAddr;
             if (addr != null)
                 obj = addr.GetObj();
-
-            var typeInfo = obj.GetType();
-            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-            FieldInfo fieldInfo = null;
-            while (typeInfo != null)
-            {
-                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
-                if (fieldInfo != null)
-                    break;
-                typeInfo = typeInfo.BaseType;
-            }
-            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, obj.GetType()));
-
+            var fieldInfo = GetFieldInfoByFieldDefinition(fieldDef);
             var fieldAddr = VMAddrForFieldInfo.Create(new VMAddrForFieldInfo.VMAddrForFieldInfoData(fieldInfo, obj));
             machineStack.Push(fieldAddr);
             Profiler.EndSample();
@@ -950,18 +930,7 @@ namespace ILVM
         private bool ExecuteLdsfld(FieldDefinition fieldDef)
         {
             Profiler.BeginSample("ILVM: ExecuteLdsfld");
-            var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
-            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-            FieldInfo fieldInfo = null;
-            while (typeInfo != null)
-            {
-                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
-                if (fieldInfo != null)
-                    break;
-                typeInfo = typeInfo.BaseType;
-            }
-            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, fieldDef.DeclaringType.FullName));
-
+            var fieldInfo = GetFieldInfoByFieldDefinition(fieldDef);
             var val = fieldInfo.GetValue(null);
             machineStack.Push(val);
             Profiler.EndSample();
@@ -971,18 +940,7 @@ namespace ILVM
         private bool ExecuteLdsflda(FieldDefinition fieldDef)
         {
             Profiler.BeginSample("ILVM: ExecuteLdsflda");
-            var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
-            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-            FieldInfo fieldInfo = null;
-            while (typeInfo != null)
-            {
-                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
-                if (fieldInfo != null)
-                    break;
-                typeInfo = typeInfo.BaseType;
-            }
-            Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, fieldDef.DeclaringType.FullName));
-
+            var fieldInfo = GetFieldInfoByFieldDefinition(fieldDef);
             var fieldAddr = VMAddrForFieldInfo.Create(new VMAddrForFieldInfo.VMAddrForFieldInfoData(fieldInfo, null));
             machineStack.Push(fieldAddr);
             Profiler.EndSample();
@@ -999,9 +957,7 @@ namespace ILVM
             var addr = obj as VMAddr;
             if (addr != null)
                 obj = addr.GetObj();
-
-            var typeInfo = obj.GetType();
-            var fieldInfo = typeInfo.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+            var fieldInfo = GetFieldInfoByFieldDefinition(fieldDef);
 
             // special handle for boolean
             if (fieldInfo.FieldType == typeof(System.Boolean) && val.GetType() == typeof(System.Int32))
@@ -1018,9 +974,8 @@ namespace ILVM
         private bool ExecuteStsfld(FieldDefinition fieldDef)
         {
             Profiler.BeginSample("ILVM: ExecuteStsfld");
-            var classType = GetTypeByName(fieldDef.DeclaringType.FullName);
-            var fieldInfo = classType.GetField(fieldDef.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
             var val = machineStack.Pop();
+            var fieldInfo = GetFieldInfoByFieldDefinition(fieldDef);
             fieldInfo.SetValue(null, val);
             // special handle for boolean
             if (fieldInfo.FieldType == typeof(System.Boolean) && val.GetType() == typeof(System.Int32))
@@ -2130,19 +2085,6 @@ namespace ILVM
             object result;
             try
             {
-                if (methodInfo.IsGenericMethodDefinition)
-                {
-                    // trait generic type from methodRef
-                    var genericParams = new Type[methodInfo.GetGenericArguments().Length];
-                    var genericMethodRef = methodRef as GenericInstanceMethod;
-                    for (var i = 0; i != genericMethodRef.GenericArguments.Count; ++i)
-                    {
-                        var genericTypeRef = genericMethodRef.GenericArguments[i];
-                        var genericTypeInfo = GetTypeInfoFromTypeReference(genericTypeRef);
-                        genericParams[i] = genericTypeInfo;
-                    }
-                    methodInfo = methodInfo.MakeGenericMethod(genericParams);
-                }
                 result = InternalCall(methodRef, methodInfo, instance, parameters, virtualCall);
             }
             catch (Exception e)
@@ -2175,10 +2117,7 @@ namespace ILVM
 
         private bool ExecuteCallvirt(MethodReference methodRef)
         {
-            Profiler.BeginSample("ILVM: ExecuteCallvirt");
-            var ret = ExecuteCall(methodRef, true);
-            Profiler.EndSample();
-            return ret;
+            return ExecuteCall(methodRef, true);
         }
 
         private bool ExecuteCallProp(MethodReference methodRef)
@@ -2382,8 +2321,9 @@ namespace ILVM
 
             do
             {
-                var allMethods = new List<MethodInfo>(classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static));
-                var allMatched = new List<MethodInfo>();
+                var allMethods = ListPool<MethodInfo>.Claim(128);
+                var allMatched = ListPool<MethodInfo>.Claim(8);
+                allMethods.AddRange(classInfo.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static));
 
                 // check name & param cnt first
                 foreach (var method in allMethods)
@@ -2396,17 +2336,22 @@ namespace ILVM
                 }
                 if (allMatched.Count == 0)
                 {
+                    ListPool<MethodInfo>.Release(allMethods);
+                    ListPool<MethodInfo>.Release(allMatched);
                     break;
                 }
                 if (allMatched.Count == 1)
                 {
                     methodInfo = allMatched[0];
+                    ListPool<MethodInfo>.Release(allMethods);
+                    ListPool<MethodInfo>.Release(allMatched);
                     break;
                 }
             
                 // check param type then
+                ListPool<MethodInfo>.Release(allMethods);
                 allMethods = allMatched;
-                allMatched = new List<MethodInfo>();
+                allMatched = ListPool<MethodInfo>.Claim(8);
                 foreach (var method in allMethods)
                 {
                     var matched = true;
@@ -2426,17 +2371,22 @@ namespace ILVM
                 }
                 if (allMatched.Count == 0)
                 {
+                    ListPool<MethodInfo>.Release(allMethods);
+                    ListPool<MethodInfo>.Release(allMatched);
                     break;
                 }
                 if (allMatched.Count == 1)
                 {
                     methodInfo = allMatched[0];
+                    ListPool<MethodInfo>.Release(allMethods);
+                    ListPool<MethodInfo>.Release(allMatched);
                     break;
                 }
             
                 // check param type name
+                ListPool<MethodInfo>.Release(allMethods);
                 allMethods = allMatched;
-                allMatched = new List<MethodInfo>();
+                allMatched = ListPool<MethodInfo>.Claim(8);
                 foreach (var method in allMethods)
                 {
                     var matched = true;
@@ -2457,10 +2407,13 @@ namespace ILVM
                 if (allMatched.Count == 1)
                 {
                     methodInfo = allMatched[0];
+                    ListPool<MethodInfo>.Release(allMethods);
+                    ListPool<MethodInfo>.Release(allMatched);
                     break;
                 }
                 if (allMatched.Count == 0)
                 {
+                    ListPool<MethodInfo>.Release(allMatched);
                     allMatched = allMethods;
                     Logger.Error("ILVM: has multi method can match {0}", methodRef);
                 }
@@ -2483,9 +2436,24 @@ namespace ILVM
                     return 0;
                 });
                 methodInfo = allMatched[0];
+                ListPool<MethodInfo>.Release(allMatched);
                 break;
             }
             while (false);
+
+            // trait generic type from methodRef
+            if (methodInfo.IsGenericMethodDefinition)
+            {
+                var genericParams = new Type[methodInfo.GetGenericArguments().Length];
+                var genericMethodRef = methodRef as GenericInstanceMethod;
+                for (var i = 0; i != genericMethodRef.GenericArguments.Count; ++i)
+                {
+                    var genericTypeRef = genericMethodRef.GenericArguments[i];
+                    var genericTypeInfo = GetTypeInfoFromTypeReference(genericTypeRef);
+                    genericParams[i] = genericTypeInfo;
+                }
+                methodInfo = methodInfo.MakeGenericMethod(genericParams);
+            }
 
             ILVmManager.SetVMMethodInfo(methodRef, methodInfo);
             Profiler.EndSample();
@@ -2521,8 +2489,9 @@ namespace ILVM
             
             do
             {
-                var allConstructors = new List<ConstructorInfo>(classInfo.GetConstructors());
-                var allMatched = new List<ConstructorInfo>();
+                var allConstructors = ListPool<ConstructorInfo>.Claim(32);
+                var allMatched = ListPool<ConstructorInfo>.Claim(8);
+                allConstructors.AddRange(classInfo.GetConstructors());
 
                 // check name & param cnt first
                 foreach (var constructor in allConstructors)
@@ -2533,17 +2502,22 @@ namespace ILVM
                 }
                 if (allMatched.Count == 0)
                 {
+                    ListPool<ConstructorInfo>.Release(allConstructors);
+                    ListPool<ConstructorInfo>.Release(allMatched);
                     break;
                 }
                 if (allMatched.Count == 1)
                 {
                     constructorInfo = allMatched[0];
+                    ListPool<ConstructorInfo>.Release(allConstructors);
+                    ListPool<ConstructorInfo>.Release(allMatched);
                     break;
                 }
 
                 // check param type then
+                ListPool<ConstructorInfo>.Release(allConstructors);
                 allConstructors = allMatched;
-                allMatched = new List<ConstructorInfo>();
+                allMatched = ListPool<ConstructorInfo>.Claim(8);
                 foreach (var constructor in allConstructors)
                 {
                     if (constructor.GetParameters().Length != methodDef.Parameters.Count)
@@ -2566,17 +2540,22 @@ namespace ILVM
                 }
                 if (allMatched.Count == 0)
                 {
+                    ListPool<ConstructorInfo>.Release(allConstructors);
+                    ListPool<ConstructorInfo>.Release(allMatched);
                     break;
                 }
                 if (allMatched.Count == 1)
                 {
                     constructorInfo = allMatched[0];
+                    ListPool<ConstructorInfo>.Release(allConstructors);
+                    ListPool<ConstructorInfo>.Release(allMatched);
                     break;
                 }
 
                 // check param type name
+                ListPool<ConstructorInfo>.Release(allConstructors);
                 allConstructors = allMatched;
-                allMatched = new List<ConstructorInfo>();
+                allMatched = ListPool<ConstructorInfo>.Claim(8);
                 foreach (var constructor in allConstructors)
                 {
                     var matched = true;
@@ -2597,10 +2576,13 @@ namespace ILVM
                 if (allMatched.Count == 1)
                 {
                     constructorInfo = allMatched[0];
+                    ListPool<ConstructorInfo>.Release(allConstructors);
+                    ListPool<ConstructorInfo>.Release(allMatched);
                     break;
                 }
                 if (allMatched.Count == 0)
                 {
+                    ListPool<ConstructorInfo>.Release(allMatched);
                     allMatched = allConstructors;
                     Logger.Error("ILVM: has multi method can match {0}", methodRef);
                 }
@@ -2623,6 +2605,7 @@ namespace ILVM
                     return 0;
                 });
                 constructorInfo = allMatched[0];
+                ListPool<ConstructorInfo>.Release(allMatched);
             }
             while (false);
 
@@ -2731,6 +2714,26 @@ namespace ILVM
             propInfo = classInfo.GetProperty(propName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
             ILVmManager.SetVMPropertyInfo(methodRef, propInfo);
             return propInfo;
+        }
+        
+        private FieldInfo GetFieldInfoByFieldDefinition(FieldDefinition fieldDef)
+        {
+            var fieldInfo = ILVmManager.GetVMFieldInfo(fieldDef);
+            if (fieldInfo != null)
+                return fieldInfo;
+
+            var typeInfo = GetTypeByName(fieldDef.DeclaringType.FullName);
+            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+            while (typeInfo != null)
+            {
+                fieldInfo = typeInfo.GetField(fieldDef.Name, bindingFlags);
+                if (fieldInfo != null)
+                    break;
+                typeInfo = typeInfo.BaseType;
+            }
+            //Assert.IsNotNull(fieldInfo, string.Format("fieldInfo {0} not found in {1}", fieldDef.Name, obj.GetType()));
+            ILVmManager.SetVMFieldInfo(fieldDef, fieldInfo);
+            return fieldInfo;
         }
 
         private Type GetTypeByName(string typeName)

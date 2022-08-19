@@ -76,6 +76,91 @@ namespace ILVM
         }
     }
     
+	public static class ListPool<T>
+	{
+		/** Internal pool */
+		static List<List<T>> pool;
+		
+		/** Static constructor */
+		static ListPool ()
+		{
+			pool = new List<List<T>> ();
+		}
+		
+		/** Claim a list.
+		 * Returns a pooled list if any are in the pool.
+		 * Otherwise it creates a new one.
+		 * After usage, this list should be released using the Release function (though not strictly necessary).
+		 */
+		public static List<T> Claim () {
+			if (pool.Count > 0) {
+				List<T> ls = pool[pool.Count-1];
+				pool.RemoveAt(pool.Count-1);
+				return ls;
+			} else {
+				return new List<T>();
+			}
+		}
+		
+		/** Claim a list with minimum capacity
+		 * Returns a pooled list if any are in the pool.
+		 * Otherwise it creates a new one.
+		 * After usage, this list should be released using the Release function (though not strictly necessary).
+		 * This list returned will have at least the capacity specified.
+		 */
+		public static List<T> Claim (int capacity) {
+			if (pool.Count > 0) {
+				//List<T> list = pool.Pop();
+				List<T> list = pool[pool.Count-1];
+				pool.RemoveAt(pool.Count-1);
+				
+				if (list.Capacity < capacity) list.Capacity = capacity;
+				
+				return list;
+			} else {
+				return new List<T>(capacity);
+			}
+		}
+		
+		/** Makes sure the pool contains at least \a count pooled items with capacity \a size.
+		 * This is good if you want to do all allocations at start.
+		 */
+		public static void Warmup (int count, int size) {
+			List<T>[] tmp = new List<T>[count];
+			for (int i=0;i<count;i++) tmp[i] = Claim (size);
+			for (int i=0;i<count;i++) Release (tmp[i]);
+		}
+		
+		/** Releases a list.
+		 * After the list has been released it should not be used anymore.
+		 * 
+		 * \throws System.InvalidOperationException
+		 * Releasing a list when it has already been released will cause an exception to be thrown.
+		 * 
+		 * \see Claim
+		 */
+		public static void Release (List<T> list) {
+			
+			for (int i=0;i<pool.Count;i++)
+				if (pool[i] == list)
+					throw new System.InvalidOperationException ("The List is released even though it is in the pool");
+			
+			list.Clear ();
+			pool.Add (list);
+		}
+		
+		/** Clears the pool for lists of this type.
+		 * This is an O(n) operation, where n is the number of pooled lists.
+		 */
+		public static void Clear () {
+			pool.Clear ();
+		}
+		
+		/** Number of lists of this type in the pool */
+		public static int GetSize () {
+			return pool.Count;
+		}
+	}
 
     public class AssemblyHandle : IDisposable
     {
@@ -587,7 +672,7 @@ namespace ILVM
 
         #region VM: mono Type to reflection Type 
 
-        private static Dictionary<TypeReference, Type> cacheTypeRefToTypeInfo = new Dictionary<TypeReference, Type>(1024);
+        private static Dictionary<string, Type> cacheTypeRefToTypeInfo = new Dictionary<string, Type>(1024);
 
         public static Type GetVMTypeInfo(TypeReference typeRef)
         {
@@ -595,16 +680,17 @@ namespace ILVM
                 return null;
 
             Type typeInfo;
-            cacheTypeRefToTypeInfo.TryGetValue(typeRef, out typeInfo);
+            cacheTypeRefToTypeInfo.TryGetValue(typeRef.FullName, out typeInfo);
             return typeInfo;
         }
 
         public static void SetVMTypeInfo(TypeReference typeRef, Type typeInfo)
         {
-            if (cacheTypeRefToTypeInfo.ContainsKey(typeRef))
-                cacheTypeRefToTypeInfo[typeRef] = typeInfo;
+            var key = typeRef.FullName;
+            if (cacheTypeRefToTypeInfo.ContainsKey(key))
+                cacheTypeRefToTypeInfo[key] = typeInfo;
             else
-                cacheTypeRefToTypeInfo.Add(typeRef, typeInfo);
+                cacheTypeRefToTypeInfo.Add(key, typeInfo);
         }
 
         public static void ClearVMTypeInfo()
@@ -613,7 +699,7 @@ namespace ILVM
         }
 
         
-        private static Dictionary<MethodReference, MethodInfo> cacheMethodRefToMethodInfo = new Dictionary<MethodReference, MethodInfo>(1024);
+        private static Dictionary<string, MethodInfo> cacheMethodRefToMethodInfo = new Dictionary<string, MethodInfo>(1024);
 
         public static MethodInfo GetVMMethodInfo(MethodReference methodRef)
         {
@@ -621,16 +707,17 @@ namespace ILVM
                 return null;
 
             MethodInfo methodInfo;
-            cacheMethodRefToMethodInfo.TryGetValue(methodRef, out methodInfo);
+            cacheMethodRefToMethodInfo.TryGetValue(methodRef.FullName, out methodInfo);
             return methodInfo;
         }
 
         public static void SetVMMethodInfo(MethodReference methodRef, MethodInfo methodInfo)
         {
-            if (cacheMethodRefToMethodInfo.ContainsKey(methodRef))
-                cacheMethodRefToMethodInfo[methodRef] = methodInfo;
+            var key = methodRef.FullName;
+            if (cacheMethodRefToMethodInfo.ContainsKey(key))
+                cacheMethodRefToMethodInfo[key] = methodInfo;
             else
-                cacheMethodRefToMethodInfo.Add(methodRef, methodInfo);
+                cacheMethodRefToMethodInfo.Add(key, methodInfo);
         }
 
         public static void ClearVMMethodInfo()
@@ -639,7 +726,7 @@ namespace ILVM
         }
 
         
-        private static Dictionary<MethodReference, ConstructorInfo> cacheMethodRefToConstructorInfo = new Dictionary<MethodReference, ConstructorInfo>(1024);
+        private static Dictionary<string, ConstructorInfo> cacheMethodRefToConstructorInfo = new Dictionary<string, ConstructorInfo>(1024);
 
         public static ConstructorInfo GetVMConstructorInfo(MethodReference methodRef)
         {
@@ -647,16 +734,17 @@ namespace ILVM
                 return null;
 
             ConstructorInfo constructorInfo;
-            cacheMethodRefToConstructorInfo.TryGetValue(methodRef, out constructorInfo);
+            cacheMethodRefToConstructorInfo.TryGetValue(methodRef.FullName, out constructorInfo);
             return constructorInfo;
         }
 
         public static void SetVMConstructorInfo(MethodReference methodRef, ConstructorInfo constructorInfo)
         {
-            if (cacheMethodRefToConstructorInfo.ContainsKey(methodRef))
-                cacheMethodRefToConstructorInfo[methodRef] = constructorInfo;
+            var key = methodRef.FullName;
+            if (cacheMethodRefToConstructorInfo.ContainsKey(key))
+                cacheMethodRefToConstructorInfo[key] = constructorInfo;
             else
-                cacheMethodRefToConstructorInfo.Add(methodRef, constructorInfo);
+                cacheMethodRefToConstructorInfo.Add(key, constructorInfo);
         }
 
         public static void ClearVMConstructorInfo()
@@ -665,7 +753,7 @@ namespace ILVM
         }
 
         
-        private static Dictionary<MethodReference, PropertyInfo> cacheMethodRefToPropertyInfo = new Dictionary<MethodReference, PropertyInfo>(1024);
+        private static Dictionary<string, PropertyInfo> cacheMethodRefToPropertyInfo = new Dictionary<string, PropertyInfo>(1024);
 
         public static PropertyInfo GetVMPropertyInfo(MethodReference methodRef)
         {
@@ -673,23 +761,51 @@ namespace ILVM
                 return null;
 
             PropertyInfo propInfo;
-            cacheMethodRefToPropertyInfo.TryGetValue(methodRef, out propInfo);
+            cacheMethodRefToPropertyInfo.TryGetValue(methodRef.FullName, out propInfo);
             return propInfo;
         }
 
         public static void SetVMPropertyInfo(MethodReference methodRef, PropertyInfo propInfo)
         {
-            if (cacheMethodRefToPropertyInfo.ContainsKey(methodRef))
-                cacheMethodRefToPropertyInfo[methodRef] = propInfo;
+            var key = methodRef.FullName;
+            if (cacheMethodRefToPropertyInfo.ContainsKey(key))
+                cacheMethodRefToPropertyInfo[key] = propInfo;
             else
-                cacheMethodRefToPropertyInfo.Add(methodRef, propInfo);
+                cacheMethodRefToPropertyInfo.Add(key, propInfo);
         }
 
         public static void ClearVMPropertyInfo()
         {
             cacheMethodRefToPropertyInfo.Clear();
         }
+        
 
+
+        private static Dictionary<string, FieldInfo> cacheFieldDefToFieldInfo = new Dictionary<string, FieldInfo>(1024);
+
+        public static FieldInfo GetVMFieldInfo(FieldDefinition fieldDef)
+        {
+            if (fieldDef == null)
+                return null;
+
+            FieldInfo fieldInfo;
+            cacheFieldDefToFieldInfo.TryGetValue(fieldDef.FullName, out fieldInfo);
+            return fieldInfo;
+        }
+
+        public static void SetVMFieldInfo(FieldDefinition fieldDef, FieldInfo fieldInfo)
+        {
+            var key = fieldDef.FullName;
+            if (cacheFieldDefToFieldInfo.ContainsKey(key))
+                cacheFieldDefToFieldInfo[key] = fieldInfo;
+            else
+                cacheFieldDefToFieldInfo.Add(key, fieldInfo);
+        }
+
+        public static void ClearVMFieldInfo()
+        {
+            cacheFieldDefToFieldInfo.Clear();
+        }
 
         
         private static Dictionary<string, Type> cacheNameToTypeInfo = new Dictionary<string, Type>(1024);
