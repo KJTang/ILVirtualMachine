@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.UI;
 
-public class HelloWorld : MonoBehaviour
+public class ProfileBtn : MonoBehaviour
 {
     // Start is called before the first frame update
     void Start()
@@ -27,7 +27,7 @@ public class HelloWorld : MonoBehaviour
     private bool profiling = false;
     public void OnClick()
     {
-        Debug.Log("HelloWorld");
+        Debug.Log("ProfileBtn");
         profiling = !profiling;
     }
 
