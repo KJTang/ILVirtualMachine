@@ -1,6 +1,6 @@
 {
   "injectClass": [
-	"HelloWorld"
+	"HelloBtn"
   ], 
 "nameSpaceFilter": [
 		"ILVM",
